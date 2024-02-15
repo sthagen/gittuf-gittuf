@@ -3,9 +3,6 @@
 package gitinterface
 
 import (
-	"context"
-
-	"github.com/gittuf/gittuf/internal/tuf"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
@@ -18,9 +15,6 @@ type GitClient interface {
 	// a message, and a boolean parameter indicating if the commit must be
 	// signed.
 	Commit(Hash, string, string, bool) (Hash, error)
-	// VerifyCommitSignature verifies the signature for the commit using the
-	// provided key.
-	VerifyCommitSignature(context.Context, *object.Commit, *tuf.Key) error
 	// GetCommit returns the commit object for the supplied ID.
 	GetCommit(Hash) (*object.Commit, error)
 
@@ -29,9 +23,6 @@ type GitClient interface {
 	// object must be signed. Note that a tag reference is also created,
 	// pointing to the tag object.
 	Tag(Hash, string, string, bool) (Hash, error)
-	// VerifyTagSignature verifies the signature for the tag using the provided
-	// key.
-	VerifyTagSignature(context.Context, *object.Tag, *tuf.Key) error
 	// GetTag returns the tag object for the supplied ID.
 	GetTag(Hash) (*object.Commit, error)
 
@@ -46,8 +37,4 @@ type GitClient interface {
 	// GetReferenceHEAD returns the ID of the tip of the specified Git
 	// reference.
 	GetReferenceHEAD(string) (Hash, error)
-}
-
-type GitBinaryClient struct {
-	repositoryLocation string
 }

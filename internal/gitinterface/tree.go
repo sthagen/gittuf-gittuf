@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/gittuf/gittuf/internal/gitinterface/gogit"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
@@ -34,7 +35,8 @@ func WriteTree(repo *git.Repository, entries []object.TreeEntry) (plumbing.Hash,
 
 // GetTree returns the requested tree object.
 func GetTree(repo *git.Repository, treeID plumbing.Hash) (*object.Tree, error) {
-	return repo.TreeObject(treeID)
+	client := gogit.NewGoGitClientForRepository(repo)
+	return client.GetTree(treeID)
 }
 
 // EmptyTree returns the hash of an empty tree in a Git repository.

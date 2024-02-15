@@ -5,16 +5,15 @@ package gitinterface
 import (
 	"context"
 	"errors"
-	"io"
 	"strings"
 
-	"github.com/gittuf/gittuf/internal/signerverifier"
+	"github.com/gittuf/gittuf/internal/gitinterface/gogit"
+	"github.com/gittuf/gittuf/internal/gitinterface/signatures"
 	"github.com/gittuf/gittuf/internal/tuf"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/go-git/go-git/v5/storage/memory"
 	"github.com/jonboulle/clockwork"
 )
 
@@ -37,32 +36,8 @@ func IsTag(repo *git.Repository, target string) bool {
 
 // Tag creates a new tag in the repository pointing to the specified target.
 func Tag(repo *git.Repository, target plumbing.Hash, name, message string, sign bool) (plumbing.Hash, error) {
-	gitConfig, err := getGitConfig(repo)
-	if err != nil {
-		return plumbing.ZeroHash, err
-	}
-
-	_, err = repo.Reference(plumbing.NewTagReferenceName(name), true)
-	if err == nil {
-		return plumbing.ZeroHash, ErrTagAlreadyExists
-	}
-
-	targetObj, err := repo.Object(plumbing.AnyObject, target)
-	if err != nil {
-		return plumbing.ZeroHash, err
-	}
-
-	tag := CreateTagObject(gitConfig, targetObj, name, message, clock)
-
-	if sign {
-		signature, err := signTag(tag)
-		if err != nil {
-			return plumbing.ZeroHash, err
-		}
-		tag.PGPSignature = signature
-	}
-
-	return ApplyTag(repo, tag)
+	client := gogit.NewGoGitClientForRepository(repo)
+	return client.Tag(target, name, message, sign)
 }
 
 // ApplyTag sets the tag reference after the tag object is written to the
@@ -106,65 +81,11 @@ func CreateTagObject(gitConfig *config.Config, targetObj object.Object, name, me
 // VerifyTagSignature is used to verify a cryptographic signature associated
 // with tag using TUF public keys.
 func VerifyTagSignature(ctx context.Context, tag *object.Tag, key *tuf.Key) error {
-	switch key.KeyType {
-	case signerverifier.GPGKeyType:
-		if _, err := tag.Verify(key.KeyVal.Public); err != nil {
-			return ErrIncorrectVerificationKey
-		}
-
-		return nil
-	case signerverifier.RSAKeyType, signerverifier.ECDSAKeyType, signerverifier.ED25519KeyType:
-		tagContents, err := getTagBytesWithoutSignature(tag)
-		if err != nil {
-			return errors.Join(ErrVerifyingSSHSignature, err)
-		}
-		tagSignature := []byte(tag.PGPSignature)
-
-		if err := verifySSHKeySignature(key, tagContents, tagSignature); err != nil {
-			return errors.Join(ErrIncorrectVerificationKey, err)
-		}
-
-		return nil
-	case signerverifier.FulcioKeyType:
-		tagContents, err := getTagBytesWithoutSignature(tag)
-		if err != nil {
-			return errors.Join(ErrVerifyingSigstoreSignature, err)
-		}
-		tagSignature := []byte(tag.PGPSignature)
-
-		if err := verifyGitsignSignature(ctx, key, tagContents, tagSignature); err != nil {
-			return errors.Join(ErrIncorrectVerificationKey, err)
-		}
-
-		return nil
-	}
-
-	return ErrUnknownSigningMethod
+	return signatures.VerifyTagSignature(ctx, tag, key)
 }
 
 // GetTag returns the requested tag object.
 func GetTag(repo *git.Repository, tagID plumbing.Hash) (*object.Tag, error) {
-	return repo.TagObject(tagID)
-}
-
-func signTag(tag *object.Tag) (string, error) {
-	tagContents, err := getTagBytesWithoutSignature(tag)
-	if err != nil {
-		return "", err
-	}
-
-	return signGitObject(tagContents)
-}
-
-func getTagBytesWithoutSignature(tag *object.Tag) ([]byte, error) {
-	tagEncoded := memory.NewStorage().NewEncodedObject()
-	if err := tag.EncodeWithoutSignature(tagEncoded); err != nil {
-		return nil, err
-	}
-	r, err := tagEncoded.Reader()
-	if err != nil {
-		return nil, err
-	}
-
-	return io.ReadAll(r)
+	client := gogit.NewGoGitClientForRepository(repo)
+	return client.GetTag(tagID)
 }

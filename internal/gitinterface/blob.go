@@ -4,8 +4,8 @@ package gitinterface
 
 import (
 	"errors"
-	"io"
 
+	"github.com/gittuf/gittuf/internal/gitinterface/gogit"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -16,45 +16,21 @@ var ErrWrittenBlobLengthMismatch = errors.New("length of blob written does not m
 
 // ReadBlob returns the contents of a the blob referenced by blobID.
 func ReadBlob(repo *git.Repository, blobID plumbing.Hash) ([]byte, error) {
-	blob, err := GetBlob(repo, blobID)
-	if err != nil {
-		return nil, err
-	}
-
-	reader, err := blob.Reader()
-	if err != nil {
-		return nil, err
-	}
-
-	return io.ReadAll(reader)
+	client := gogit.NewGoGitClientForRepository(repo)
+	return client.ReadBlob(blobID)
 }
 
 // WriteBlob creates a blob object with the specified contents and returns the
 // ID of the resultant blob.
 func WriteBlob(repo *git.Repository, contents []byte) (plumbing.Hash, error) {
-	obj := repo.Storer.NewEncodedObject()
-	obj.SetType(plumbing.BlobObject)
-
-	writer, err := obj.Writer()
-	if err != nil {
-		return plumbing.ZeroHash, err
-	}
-
-	length, err := writer.Write(contents)
-	if err != nil {
-		return plumbing.ZeroHash, err
-	}
-
-	if length != len(contents) {
-		return plumbing.ZeroHash, ErrWrittenBlobLengthMismatch
-	}
-
-	return repo.Storer.SetEncodedObject(obj)
+	client := gogit.NewGoGitClientForRepository(repo)
+	return client.WriteBlob(contents)
 }
 
 // GetBlob returns the requested blob object.
 func GetBlob(repo *git.Repository, blobID plumbing.Hash) (*object.Blob, error) {
-	return repo.BlobObject(blobID)
+	client := gogit.NewGoGitClientForRepository(repo)
+	return client.GetBlob(blobID)
 }
 
 // EmptyBlob returns the hash of an empty blob in a Git repository.
