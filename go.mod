@@ -2,6 +2,8 @@ module github.com/gittuf/gittuf
 
 go 1.22
 
+replace github.com/spf13/pflag v1.0.5 => github.com/cornfeedhobo/pflag v1.1.0
+
 require (
 	github.com/ProtonMail/go-crypto v1.0.0
 	github.com/go-git/go-billy/v5 v5.5.0
