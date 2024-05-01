@@ -32,6 +32,7 @@ func ReadBlob(repo *git.Repository, blobID plumbing.Hash) ([]byte, error) {
 }
 
 func (r *Repository) ReadBlob(blobID string) ([]byte, error) {
+	// TODO: check with cat-file -t that it's a blob
 	stdOut, stdErr, err := r.executeGitCommand("cat-file", "-p", blobID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read blob: %s", stdErr)

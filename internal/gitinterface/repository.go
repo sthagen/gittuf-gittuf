@@ -10,7 +10,11 @@ import (
 	"strings"
 )
 
-const binary = "git"
+const (
+	ZeroHash = "0000000000000000000000000000000000000000"
+
+	binary = "git"
+)
 
 type Repository struct {
 	gitDirPath string
