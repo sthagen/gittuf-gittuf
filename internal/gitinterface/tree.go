@@ -299,6 +299,9 @@ func (t *ReplacementTreeBuilder) writeTrees(parent string, tree *entry) (string,
 func (t *ReplacementTreeBuilder) writeTree(entries []*entry) (string, error) {
 	input := ""
 	for _, entry := range entries {
+		// this is very opinionated about the modes right now because the plan
+		// is to use it for gittuf metadata, which requires regular files and
+		// subdirectories
 		if entry.isDir {
 			input += "040000 tree " + entry.gitID + "    " + entry.name
 		} else {
