@@ -4,7 +4,9 @@ package gitinterface
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"strings"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -29,6 +31,15 @@ func ReadBlob(repo *git.Repository, blobID plumbing.Hash) ([]byte, error) {
 	return io.ReadAll(reader)
 }
 
+func (r *Repository) ReadBlob(blobID string) ([]byte, error) {
+	stdOut, stdErr, err := r.executeGitCommand("cat-file", "-p", blobID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read blob: %s", stdErr)
+	}
+
+	return []byte(stdOut), nil
+}
+
 // WriteBlob creates a blob object with the specified contents and returns the
 // ID of the resultant blob.
 func WriteBlob(repo *git.Repository, contents []byte) (plumbing.Hash, error) {
@@ -50,6 +61,15 @@ func WriteBlob(repo *git.Repository, contents []byte) (plumbing.Hash, error) {
 	}
 
 	return repo.Storer.SetEncodedObject(obj)
+}
+
+func (r *Repository) WriteBlob(contents []byte) (string, error) {
+	stdOut, stdErr, err := r.executeGitCommandWithStdIn(contents, "hash-object", "-t", "blob", "-w", "--stdin")
+	if err != nil {
+		return "", fmt.Errorf("unable to write blob: %s", stdErr)
+	}
+
+	return strings.TrimSpace(stdOut), nil
 }
 
 // GetBlob returns the requested blob object.
