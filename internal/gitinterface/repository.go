@@ -34,7 +34,7 @@ func LoadRepository() (*Repository, error) {
 }
 
 func (r *Repository) executeGitCommand(args ...string) (string, string, error) {
-	args = append(args, "--git-dir", r.gitDirPath)
+	args = append([]string{"--git-dir", r.gitDirPath}, args...)
 	return r.executeGitCommandDirect(args...)
 }
 
@@ -61,7 +61,7 @@ func (r *Repository) executeGitCommandDirect(args ...string) (string, string, er
 }
 
 func (r *Repository) executeGitCommandWithStdIn(stdInContents []byte, args ...string) (string, string, error) {
-	args = append(args, "--git-dir", r.gitDirPath)
+	args = append([]string{"--git-dir", r.gitDirPath}, args...)
 	return r.executeGitCommandDirectWithStdIn(stdInContents, args...)
 }
 
