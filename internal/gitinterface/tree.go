@@ -4,6 +4,7 @@ package gitinterface
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os/exec"
 	"path"
@@ -74,6 +75,28 @@ func GetAllFilesInTree(tree *object.Tree) (map[string]plumbing.Hash, error) {
 		}
 
 		files[name] = entry.Hash
+	}
+
+	return files, nil
+}
+
+func (r *Repository) GetAllFilesInTree(treeID string) (map[string]string, error) {
+	stdOut, stdErr, err := r.executeGitCommand("ls-tree", "-r", "--format='%(path) %(objectname)'", treeID)
+	if err != nil {
+		return nil, fmt.Errorf("unable to enumerate all files in tree: %s", stdErr)
+	}
+	stdOut = strings.TrimSpace(stdOut)
+
+	entries := strings.Split(stdOut, "\n")
+	if len(entries) == 0 {
+		return nil, nil
+	}
+
+	files := map[string]string{}
+	for _, entry := range entries {
+		entrySplit := strings.Split(entry, " ")
+		// we control entry's format in --format above
+		files[entrySplit[0]] = entrySplit[1]
 	}
 
 	return files, nil
@@ -196,4 +219,106 @@ func (t *TreeBuilder) writeTrees(parent string, tree *object.Tree) (plumbing.Has
 	}
 
 	return WriteTree(t.r, tree.Entries)
+}
+
+type ReplacementTreeBuilder struct {
+	repo    *Repository
+	trees   map[string]*entry
+	entries map[string]*entry
+}
+
+func NewReplacementTreeBuilder(repo *Repository) *ReplacementTreeBuilder {
+	return &ReplacementTreeBuilder{repo: repo}
+}
+
+func (t *ReplacementTreeBuilder) WriteRootTreeFromBlobIDs(files map[string]string) (string, error) {
+	rootNoteKey := ""
+	t.trees = map[string]*entry{rootNoteKey: {}}
+	t.entries = map[string]*entry{}
+
+	for path, gitID := range files {
+		t.buildIntermediates(path, gitID)
+	}
+
+	return t.writeTrees(rootNoteKey, t.trees[rootNoteKey])
+}
+
+func (t *ReplacementTreeBuilder) buildIntermediates(name, gitID string) {
+	parts := strings.Split(name, "/")
+
+	var fullPath string
+	for _, part := range parts {
+		parent := fullPath
+		fullPath = path.Join(fullPath, part)
+
+		t.buildTree(name, parent, fullPath, gitID)
+	}
+}
+
+func (t *ReplacementTreeBuilder) buildTree(name, parent, fullPath, gitID string) {
+	if _, ok := t.trees[fullPath]; ok {
+		return
+	}
+
+	if _, ok := t.entries[fullPath]; ok {
+		return
+	}
+
+	entryObj := &entry{name: path.Base(fullPath)}
+
+	if fullPath == name {
+		entryObj.isDir = false
+		entryObj.gitID = gitID
+	} else {
+		entryObj.isDir = true
+		t.trees[fullPath] = &entry{}
+	}
+
+	t.trees[parent].entries = append(t.trees[parent].entries, entryObj)
+}
+
+func (t *ReplacementTreeBuilder) writeTrees(parent string, tree *entry) (string, error) {
+	for i, e := range tree.entries {
+		if !e.isDir && e.gitID != "" {
+			continue
+		}
+
+		p := path.Join(parent, e.name)
+		entryID, err := t.writeTrees(p, t.trees[p])
+		if err != nil {
+			return "", err
+		}
+		e.gitID = entryID
+
+		tree.entries[i] = e
+	}
+
+	return t.writeTree(tree.entries)
+}
+
+func (t *ReplacementTreeBuilder) writeTree(entries []*entry) (string, error) {
+	input := ""
+	for _, entry := range entries {
+		if entry.isDir {
+			input += "040000 tree " + entry.gitID + "    " + entry.name
+		} else {
+			input += "100644 blob " + entry.gitID + "    " + entry.name
+		}
+		input += "\n"
+	}
+
+	stdOut, stdErr, err := t.repo.executeGitCommandWithStdIn([]byte(input), "mk-tree")
+	if err != nil {
+		return "", fmt.Errorf("unable to write Git tree: %s", stdErr)
+	}
+
+	treeID := strings.TrimSpace(stdOut)
+	return treeID, nil
+}
+
+type entry struct {
+	name    string
+	isDir   bool
+	gitID   string
+	entries []*entry // only used when isDir is true
 }
