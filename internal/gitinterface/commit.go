@@ -5,7 +5,11 @@ package gitinterface
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"os"
+	"strings"
+	"time"
 
 	"github.com/gittuf/gittuf/internal/signerverifier"
 	"github.com/gittuf/gittuf/internal/tuf"
@@ -54,6 +58,44 @@ func Commit(repo *git.Repository, treeHash plumbing.Hash, targetRef string, mess
 	}
 
 	return ApplyCommit(repo, commit, curRef)
+}
+
+func (r *Repository) Commit(treeID, targetRef, message string, sign bool) (string, error) {
+	currentGitID, err := r.GetReference(targetRef)
+	if err != nil {
+		if !errors.Is(err, ErrReferenceNotFound) {
+			return "", err
+		}
+	}
+
+	if err := os.Setenv(committerTimeKey, r.clock.Now().Format(time.RFC3339)); err != nil {
+		return "", fmt.Errorf("unable to set committer time: %w", err)
+	}
+	defer os.Unsetenv(committerTimeKey) //nolint:errcheck
+	if err := os.Setenv(authorTimeKey, r.clock.Now().Format(time.RFC3339)); err != nil {
+		return "", fmt.Errorf("unable to set author time: %w", err)
+	}
+	defer os.Unsetenv(authorTimeKey) //nolint:errcheck
+
+	args := []string{"commit-tree", "-m", message}
+
+	if currentGitID != "" {
+		args = append(args, "-p", currentGitID)
+	}
+
+	if sign {
+		args = append(args, "-S")
+	}
+
+	args = append(args, treeID)
+
+	stdOut, stdErr, err := r.executeGitCommand(args...)
+	if err != nil {
+		return "", fmt.Errorf("unable to create commit: %s", stdErr)
+	}
+	commitID := strings.TrimSpace(stdOut)
+
+	return commitID, r.CheckAndSetReference(targetRef, commitID, currentGitID)
 }
 
 // CommitUsingSpecificKey creates a new commit in the repository for the

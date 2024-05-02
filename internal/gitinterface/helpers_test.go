@@ -21,5 +21,5 @@ func createTestGitRepository(t *testing.T, dir string) *Repository {
 		t.Fatal(err)
 	}
 
-	return &Repository{gitDirPath: path.Join(dir, ".git")}
+	return &Repository{gitDirPath: path.Join(dir, ".git"), clock: testClock}
 }

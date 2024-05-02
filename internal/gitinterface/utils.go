@@ -22,8 +22,6 @@ const (
 )
 
 var (
-	ErrReferenceNotFound = plumbing.ErrReferenceNotFound
-
 	clock = clockwork.NewRealClock()
 )
 

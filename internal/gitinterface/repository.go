@@ -8,16 +8,21 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/jonboulle/clockwork"
 )
 
 const (
 	ZeroHash = "0000000000000000000000000000000000000000"
 
-	binary = "git"
+	binary           = "git"
+	committerTimeKey = "GIT_COMMITTER_DATE"
+	authorTimeKey    = "GIT_AUTHOR_DATE"
 )
 
 type Repository struct {
 	gitDirPath string
+	clock      clockwork.Clock
 }
 
 func LoadRepository() (*Repository, error) {
@@ -33,6 +38,8 @@ func LoadRepository() (*Repository, error) {
 		return nil, fmt.Errorf("unable to identify GIT_DIR: %w: %s", err, stdErr)
 	}
 	repo.gitDirPath = strings.TrimSpace(stdOut)
+
+	repo.clock = clockwork.NewRealClock()
 
 	return repo, nil
 }
