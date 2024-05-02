@@ -100,6 +100,32 @@ func TestGetAllFilesInTree(t *testing.T) {
 	assert.Equal(t, expectedFiles, files)
 }
 
+func TestGetRepositoryAllFilesInTree(t *testing.T) {
+	tempDir := t.TempDir()
+	repo := createTestGitRepository(t, tempDir)
+
+	emptyBlobID, err := repo.WriteBlob(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedFiles := map[string]string{
+		"foo":            emptyBlobID,
+		"bar/foo":        emptyBlobID,
+		"foobar/foo/bar": emptyBlobID,
+	}
+
+	treeBuilder := NewReplacementTreeBuilder(repo)
+	rootTreeID, err := treeBuilder.WriteRootTreeFromBlobIDs(expectedFiles)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	files, err := repo.GetAllFilesInTree(rootTreeID)
+	assert.Nil(t, err)
+	assert.Equal(t, expectedFiles, files)
+}
+
 func TestTreeBuilder(t *testing.T) {
 	repo, err := git.Init(memory.NewStorage(), memfs.New())
 	if err != nil {
@@ -265,5 +291,109 @@ func TestTreeBuilder(t *testing.T) {
 			t.Fatal(err)
 		}
 		assert.Equal(t, blobB, entryB.Hash)
+	})
+}
+
+func TestReplacementTreeBuilder(t *testing.T) {
+	tempDir := t.TempDir()
+	repo := createTestGitRepository(t, tempDir)
+
+	blobAID, err := repo.WriteBlob([]byte("a"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blobBID, err := repo.WriteBlob([]byte("b"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	emptyTreeID := "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+	t.Run("no blobs", func(t *testing.T) {
+		treeBuilder := NewReplacementTreeBuilder(repo)
+		treeID, err := treeBuilder.WriteRootTreeFromBlobIDs(nil)
+		assert.Nil(t, err)
+		assert.Equal(t, emptyTreeID, treeID)
+
+		treeID, err = treeBuilder.WriteRootTreeFromBlobIDs(map[string]string{})
+		assert.Nil(t, err)
+		assert.Equal(t, emptyTreeID, treeID)
+	})
+
+	t.Run("both blobs in the root directory", func(t *testing.T) {
+		treeBuilder := NewReplacementTreeBuilder(repo)
+
+		input := map[string]string{
+			"a": blobAID,
+			"b": blobBID,
+		}
+
+		rootTreeID, err := treeBuilder.WriteRootTreeFromBlobIDs(input)
+		assert.Nil(t, err)
+
+		files, err := repo.GetAllFilesInTree(rootTreeID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		assert.Equal(t, input, files)
+	})
+
+	t.Run("both blobs in same subdirectory", func(t *testing.T) {
+		treeBuilder := NewReplacementTreeBuilder(repo)
+
+		input := map[string]string{
+			"dir/a": blobAID,
+			"dir/b": blobBID,
+		}
+
+		rootTreeID, err := treeBuilder.WriteRootTreeFromBlobIDs(input)
+		assert.Nil(t, err)
+
+		files, err := repo.GetAllFilesInTree(rootTreeID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		assert.Equal(t, input, files)
+	})
+
+	t.Run("both blobs in different subdirectories", func(t *testing.T) {
+		treeBuilder := NewReplacementTreeBuilder(repo)
+
+		input := map[string]string{
+			"foo/a": blobAID,
+			"bar/b": blobBID,
+		}
+
+		rootTreeID, err := treeBuilder.WriteRootTreeFromBlobIDs(input)
+		assert.Nil(t, err)
+
+		files, err := repo.GetAllFilesInTree(rootTreeID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		assert.Equal(t, input, files)
+	})
+
+	t.Run("blobs in mix of root directory and subdirectories", func(t *testing.T) {
+		treeBuilder := NewReplacementTreeBuilder(repo)
+
+		input := map[string]string{
+			"a":                blobAID,
+			"foo/bar/foobar/b": blobBID,
+		}
+
+		rootTreeID, err := treeBuilder.WriteRootTreeFromBlobIDs(input)
+		assert.Nil(t, err)
+
+		files, err := repo.GetAllFilesInTree(rootTreeID)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		assert.Equal(t, input, files)
 	})
 }

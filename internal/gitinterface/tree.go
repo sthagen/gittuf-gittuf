@@ -81,7 +81,7 @@ func GetAllFilesInTree(tree *object.Tree) (map[string]plumbing.Hash, error) {
 }
 
 func (r *Repository) GetAllFilesInTree(treeID string) (map[string]string, error) {
-	stdOut, stdErr, err := r.executeGitCommand("ls-tree", "-r", "--format='%(path) %(objectname)'", treeID)
+	stdOut, stdErr, err := r.executeGitCommand("ls-tree", "-r", "--format=%(path) %(objectname)", treeID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to enumerate all files in tree: %s", stdErr)
 	}
@@ -303,14 +303,14 @@ func (t *ReplacementTreeBuilder) writeTree(entries []*entry) (string, error) {
 		// is to use it for gittuf metadata, which requires regular files and
 		// subdirectories
 		if entry.isDir {
-			input += "040000 tree " + entry.gitID + "    " + entry.name
+			input += "040000 tree " + entry.gitID + "\t" + entry.name
 		} else {
-			input += "100644 blob " + entry.gitID + "    " + entry.name
+			input += "100644 blob " + entry.gitID + "\t" + entry.name
 		}
 		input += "\n"
 	}
 
-	stdOut, stdErr, err := t.repo.executeGitCommandWithStdIn([]byte(input), "mk-tree")
+	stdOut, stdErr, err := t.repo.executeGitCommandWithStdIn([]byte(input), "mktree")
 	if err != nil {
 		return "", fmt.Errorf("unable to write Git tree: %s", stdErr)
 	}
