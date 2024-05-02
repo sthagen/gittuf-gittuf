@@ -13,8 +13,6 @@ import (
 )
 
 const (
-	ZeroHash = "0000000000000000000000000000000000000000"
-
 	binary           = "git"
 	committerTimeKey = "GIT_COMMITTER_DATE"
 	authorTimeKey    = "GIT_AUTHOR_DATE"
