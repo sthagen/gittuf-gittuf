@@ -52,18 +52,18 @@ func createTestGitRepository(t *testing.T, dir string) *Repository {
 	repo := &Repository{gitDirPath: path.Join(dir, ".git"), clock: testClock}
 
 	// Set up author / committer identity
-	if _, _, err := repo.executeGitCommand("config", "--local", "user.name", testName); err != nil {
+	if err := repo.SetGitConfig("user.name", testName); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := repo.executeGitCommand("config", "--local", "user.email", testEmail); err != nil {
+	if err := repo.SetGitConfig("user.email", testEmail); err != nil {
 		t.Fatal(err)
 	}
 
 	// Set up signing via ED25519 SSH key (deterministic sigs!)
-	if _, _, err := repo.executeGitCommand("config", "--local", "user.signingkey", filepath.Join(keysDir, "key")); err != nil {
+	if err := repo.SetGitConfig("user.signingkey", filepath.Join(keysDir, "key")); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := repo.executeGitCommand("config", "--local", "gpg.format", "ssh"); err != nil {
+	if err := repo.SetGitConfig("gpg.format", "ssh"); err != nil {
 		t.Fatal(err)
 	}
 

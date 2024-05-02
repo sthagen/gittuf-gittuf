@@ -82,3 +82,11 @@ func (r *Repository) GetGitConfig() (map[string]string, error) {
 
 	return config, nil
 }
+
+func (r *Repository) SetGitConfig(key, value string) error {
+	if _, stdErr, err := r.executeGitCommand("config", "--local", key, value); err != nil {
+		return fmt.Errorf("unable to set '%s' to '%s': %s", key, value, stdErr)
+	}
+
+	return nil
+}

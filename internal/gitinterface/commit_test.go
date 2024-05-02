@@ -14,6 +14,7 @@ import (
 	"github.com/gittuf/gittuf/internal/signerverifier/gpg"
 	artifacts "github.com/gittuf/gittuf/internal/testartifacts"
 	sslibsv "github.com/gittuf/gittuf/internal/third_party/go-securesystemslib/signerverifier"
+	"github.com/gittuf/gittuf/internal/tuf"
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -243,6 +244,34 @@ oYBpMWLgg6AUzpxx9mITZ2EKr4c=
 		err = VerifyCommitSignature(context.Background(), sshCommits[1], rsaKey)
 		assert.ErrorIs(t, err, ErrIncorrectVerificationKey)
 	})
+}
+
+func TestRepositoryVerifyCommit(t *testing.T) {
+	// TODO: support multiple signing types
+
+	tempDir := t.TempDir()
+	repo := createTestGitRepository(t, tempDir)
+
+	treeBuilder := NewReplacementTreeBuilder(repo)
+
+	// Write empty tree
+	emptyTreeID, err := treeBuilder.WriteRootTreeFromBlobIDs(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	commitID, err := repo.Commit(emptyTreeID, "refs/heads/main", "Initial commit\n", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	key, err := tuf.LoadKeyFromBytes(artifacts.SSHED25519Public)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = repo.VerifyCommitSignature(context.Background(), commitID, key)
+	assert.Nil(t, err)
 }
 
 func TestKnowsCommit(t *testing.T) {
