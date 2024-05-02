@@ -60,3 +60,25 @@ func execGitConfig() (io.Reader, error) {
 func getRealGitConfig(repo *git.Repository) (*config.Config, error) {
 	return repo.ConfigScoped(config.GlobalScope)
 }
+
+// Possible we don't need this if we rely on git binary to identify config for
+// signing, committer identity, etc.
+func (r *Repository) getGitConfig() (map[string]string, error) {
+	stdOut, stdErr, err := r.executeGitCommand("config", "--get-regexp", `.*`)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read Git config: %s", stdErr)
+	}
+
+	config := map[string]string{}
+
+	lines := strings.Split(strings.TrimSpace(stdOut), "\n")
+	for _, line := range lines {
+		split := strings.Split(line, " ")
+		if len(split) < 2 {
+			continue
+		}
+		config[split[0]] = strings.Join(split[1:], " ")
+	}
+
+	return config, nil
+}

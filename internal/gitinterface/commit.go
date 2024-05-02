@@ -60,6 +60,8 @@ func Commit(repo *git.Repository, treeHash plumbing.Hash, targetRef string, mess
 	return ApplyCommit(repo, commit, curRef)
 }
 
+// Explicitly choosing not to mess with worktrees because this is only for
+// /gittuf namespaces.
 func (r *Repository) Commit(treeID, targetRef, message string, sign bool) (string, error) {
 	currentGitID, err := r.GetReference(targetRef)
 	if err != nil {

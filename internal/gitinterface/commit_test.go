@@ -33,6 +33,66 @@ var (
 	gpgPrivateKey           = artifacts.GPGKey1Private
 )
 
+func TestRepositoryCommit(t *testing.T) {
+	tempDir := t.TempDir()
+	repo := createTestGitRepository(t, tempDir)
+
+	refName := "refs/heads/main"
+	treeBuilder := NewReplacementTreeBuilder(repo)
+
+	// Write empty tree
+	emptyTreeID, err := treeBuilder.WriteRootTreeFromBlobIDs(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Write second tree
+	blobID, err := repo.WriteBlob([]byte("Hello, world!\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	treeWithContentsID, err := treeBuilder.WriteRootTreeFromBlobIDs(map[string]string{"README.md": blobID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create initial commit with no tree
+	expectedInitialCommitID := "648c569f3958b899e832f04750de52cf5d0db2fa"
+	commitID, err := repo.Commit(emptyTreeID, refName, "Initial commit\n", false)
+	assert.Nil(t, err)
+	assert.Equal(t, expectedInitialCommitID, commitID)
+
+	refHead, err := repo.GetReference(refName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, expectedInitialCommitID, refHead)
+
+	// Create second commit with tree
+	expectedSecondCommitID := "3d7200c158ccfedf35a68a7d24842d60cac4ec0d"
+	commitID, err = repo.Commit(treeWithContentsID, refName, "Add README\n", false)
+	assert.Nil(t, err)
+	assert.Equal(t, expectedSecondCommitID, commitID)
+
+	refHead, err = repo.GetReference(refName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, expectedSecondCommitID, refHead)
+
+	// Create third commit with same tree but sign this time
+	expectedThirdCommitID := "821c6322a3637799591e355f92c3334134edc793"
+	commitID, err = repo.Commit(treeWithContentsID, refName, "Signing this commit\n", true)
+	assert.Nil(t, err)
+	assert.Equal(t, expectedThirdCommitID, commitID)
+
+	refHead, err = repo.GetReference(refName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, expectedThirdCommitID, refHead)
+}
+
 func TestCreateCommitObject(t *testing.T) {
 	t.Run("zero commit and zero parent", func(t *testing.T) {
 		commit := CreateCommitObject(testGitConfig, plumbing.ZeroHash, []plumbing.Hash{plumbing.ZeroHash}, "Test commit", testClock)
