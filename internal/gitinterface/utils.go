@@ -112,7 +112,7 @@ func AbsoluteReference(repo *git.Repository, target string) (string, error) {
 		return "", err
 	}
 
-	return "", ErrReferenceNotFound
+	return "", plumbing.ErrReferenceNotFound
 }
 
 // RefSpec creates a Git refspec for the specified ref.  For more information on
