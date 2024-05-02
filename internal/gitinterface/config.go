@@ -63,7 +63,7 @@ func getRealGitConfig(repo *git.Repository) (*config.Config, error) {
 
 // Possible we don't need this if we rely on git binary to identify config for
 // signing, committer identity, etc.
-func (r *Repository) getGitConfig() (map[string]string, error) {
+func (r *Repository) GetGitConfig() (map[string]string, error) {
 	stdOut, stdErr, err := r.executeGitCommand("config", "--get-regexp", `.*`)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read Git config: %s", stdErr)

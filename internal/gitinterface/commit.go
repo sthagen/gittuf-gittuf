@@ -207,6 +207,53 @@ func VerifyCommitSignature(ctx context.Context, commit *object.Commit, key *tuf.
 	return ErrUnknownSigningMethod
 }
 
+func (r *Repository) VerifyCommitSignature(ctx context.Context, commitID string, key *tuf.Key) error {
+	goGitRepo, err := git.PlainOpen(r.gitDirPath)
+	if err != nil {
+		return fmt.Errorf("error opening repository: %w", err)
+	}
+
+	commit, err := goGitRepo.CommitObject(plumbing.NewHash(commitID))
+	if err != nil {
+		return fmt.Errorf("unable to load commit object: %w", err)
+	}
+
+	switch key.KeyType {
+	case signerverifier.GPGKeyType:
+		if _, err := commit.Verify(key.KeyVal.Public); err != nil {
+			return ErrIncorrectVerificationKey
+		}
+
+		return nil
+	case signerverifier.RSAKeyType, signerverifier.ECDSAKeyType, signerverifier.ED25519KeyType:
+		commitContents, err := getCommitBytesWithoutSignature(commit)
+		if err != nil {
+			return errors.Join(ErrVerifyingSSHSignature, err)
+		}
+		commitSignature := []byte(commit.PGPSignature)
+
+		if err := verifySSHKeySignature(key, commitContents, commitSignature); err != nil {
+			return errors.Join(ErrIncorrectVerificationKey, err)
+		}
+
+		return nil
+	case signerverifier.FulcioKeyType:
+		commitContents, err := getCommitBytesWithoutSignature(commit)
+		if err != nil {
+			return errors.Join(ErrVerifyingSigstoreSignature, err)
+		}
+		commitSignature := []byte(commit.PGPSignature)
+
+		if err := verifyGitsignSignature(ctx, key, commitContents, commitSignature); err != nil {
+			return errors.Join(ErrIncorrectVerificationKey, err)
+		}
+
+		return nil
+	}
+
+	return ErrUnknownSigningMethod
+}
+
 // CreateCommitObject returns a commit object using the specified parameters.
 func CreateCommitObject(gitConfig *config.Config, treeHash plumbing.Hash, parentHashes []plumbing.Hash, message string, clock clockwork.Clock) *object.Commit {
 	author := object.Signature{
