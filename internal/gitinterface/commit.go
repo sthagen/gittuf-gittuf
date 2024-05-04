@@ -287,12 +287,20 @@ func (r *Repository) GetCommitParentIDs(commitID Hash) ([]Hash, error) {
 
 	commitIDs := []Hash{}
 	for _, commitID := range commitIDSplit {
+		if commitID == "" {
+			continue
+		}
+
 		hash, err := NewHash(commitID)
 		if err != nil {
 			return nil, fmt.Errorf("invalid parent commit ID '%s': %w", commitID, err)
 		}
 
 		commitIDs = append(commitIDs, hash)
+	}
+
+	if len(commitIDs) == 0 {
+		return nil, nil
 	}
 
 	return commitIDs, nil
