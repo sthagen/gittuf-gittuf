@@ -257,6 +257,22 @@ func (r *Repository) VerifyCommitSignature(ctx context.Context, commitID Hash, k
 	return ErrUnknownSigningMethod
 }
 
+func (r *Repository) GetCommitMessage(commitID Hash) (string, error) {
+	stdOut, stdErr, err := r.executeGitCommand("cat-file", "-t", commitID.String())
+	if err != nil {
+		return "", fmt.Errorf("unable to inspect if object is commit: %s", stdErr)
+	} else if strings.TrimSpace(stdOut) != "commit" {
+		return "", fmt.Errorf("requested Git ID '%s' is not a commit object", commitID.String())
+	}
+
+	stdOut, stdErr, err = r.executeGitCommand("show", "-s", "--format=%B", commitID.String())
+	if err != nil {
+		return "", fmt.Errorf("unable to identify message for commit '%s': %s", commitID.String(), stdErr)
+	}
+
+	return strings.TrimSpace(stdOut), nil
+}
+
 // CreateCommitObject returns a commit object using the specified parameters.
 func CreateCommitObject(gitConfig *config.Config, treeHash plumbing.Hash, parentHashes []plumbing.Hash, message string, clock clockwork.Clock) *object.Commit {
 	author := object.Signature{

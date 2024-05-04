@@ -436,3 +436,27 @@ func createTestSSHSignedCommits(t *testing.T) []*object.Commit {
 
 	return testCommits
 }
+
+func TestRepositoryGetCommitMessage(t *testing.T) {
+	tempDir := t.TempDir()
+	repo := createTestGitRepository(t, tempDir)
+
+	refName := "refs/heads/main"
+	treeBuilder := NewReplacementTreeBuilder(repo)
+
+	// Write empty tree
+	emptyTreeID, err := treeBuilder.WriteRootTreeFromBlobIDs(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	message := "Initial commit"
+	commit, err := repo.Commit(emptyTreeID, refName, message, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	commitMessage, err := repo.GetCommitMessage(commit)
+	assert.Nil(t, err)
+	assert.Equal(t, message, commitMessage)
+}
