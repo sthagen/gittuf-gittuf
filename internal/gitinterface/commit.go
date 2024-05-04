@@ -270,6 +270,19 @@ func (r *Repository) GetCommitMessage(commitID Hash) (string, error) {
 	return strings.TrimSpace(stdOut), nil
 }
 
+func (r *Repository) GetCommitTreeID(commitID Hash) (string, error) {
+	if err := r.ensureIsCommit(commitID); err != nil {
+		return "", err
+	}
+
+	stdOut, stdErr, err := r.executeGitCommand("show", "-s", "--format=%T", commitID.String())
+	if err != nil {
+		return "", fmt.Errorf("unable to identify tree for commit '%s': %s", commitID.String(), stdErr)
+	}
+
+	return strings.TrimSpace(stdOut), nil
+}
+
 func (r *Repository) GetCommitParentIDs(commitID Hash) ([]Hash, error) {
 	if err := r.ensureIsCommit(commitID); err != nil {
 		return nil, err
