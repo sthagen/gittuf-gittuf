@@ -52,13 +52,13 @@ func TestRepositoryCommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	treeWithContentsID, err := treeBuilder.WriteRootTreeFromBlobIDs(map[string]string{"README.md": blobID})
+	treeWithContentsID, err := treeBuilder.WriteRootTreeFromBlobIDs(map[string]Hash{"README.md": blobID})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Create initial commit with no tree
-	expectedInitialCommitID := "648c569f3958b899e832f04750de52cf5d0db2fa"
+	expectedInitialCommitID := Hash{hash: "648c569f3958b899e832f04750de52cf5d0db2fa"}
 	commitID, err := repo.Commit(emptyTreeID, refName, "Initial commit\n", false)
 	assert.Nil(t, err)
 	assert.Equal(t, expectedInitialCommitID, commitID)
@@ -70,7 +70,7 @@ func TestRepositoryCommit(t *testing.T) {
 	assert.Equal(t, expectedInitialCommitID, refHead)
 
 	// Create second commit with tree
-	expectedSecondCommitID := "3d7200c158ccfedf35a68a7d24842d60cac4ec0d"
+	expectedSecondCommitID := Hash{hash: "3d7200c158ccfedf35a68a7d24842d60cac4ec0d"}
 	commitID, err = repo.Commit(treeWithContentsID, refName, "Add README\n", false)
 	assert.Nil(t, err)
 	assert.Equal(t, expectedSecondCommitID, commitID)
@@ -82,7 +82,7 @@ func TestRepositoryCommit(t *testing.T) {
 	assert.Equal(t, expectedSecondCommitID, refHead)
 
 	// Create third commit with same tree but sign this time
-	expectedThirdCommitID := "821c6322a3637799591e355f92c3334134edc793"
+	expectedThirdCommitID := Hash{hash: "821c6322a3637799591e355f92c3334134edc793"}
 	commitID, err = repo.Commit(treeWithContentsID, refName, "Signing this commit\n", true)
 	assert.Nil(t, err)
 	assert.Equal(t, expectedThirdCommitID, commitID)

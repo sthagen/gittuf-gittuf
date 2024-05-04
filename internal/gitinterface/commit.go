@@ -62,40 +62,43 @@ func Commit(repo *git.Repository, treeHash plumbing.Hash, targetRef string, mess
 
 // Explicitly choosing not to mess with worktrees because this is only for
 // /gittuf namespaces.
-func (r *Repository) Commit(treeID, targetRef, message string, sign bool) (string, error) {
+func (r *Repository) Commit(treeID Hash, targetRef, message string, sign bool) (Hash, error) {
 	currentGitID, err := r.GetReference(targetRef)
 	if err != nil {
 		if !errors.Is(err, ErrReferenceNotFound) {
-			return "", err
+			return ZeroHash, err
 		}
 	}
 
 	if err := os.Setenv(committerTimeKey, r.clock.Now().Format(time.RFC3339)); err != nil {
-		return "", fmt.Errorf("unable to set committer time: %w", err)
+		return ZeroHash, fmt.Errorf("unable to set committer time: %w", err)
 	}
 	defer os.Unsetenv(committerTimeKey) //nolint:errcheck
 	if err := os.Setenv(authorTimeKey, r.clock.Now().Format(time.RFC3339)); err != nil {
-		return "", fmt.Errorf("unable to set author time: %w", err)
+		return ZeroHash, fmt.Errorf("unable to set author time: %w", err)
 	}
 	defer os.Unsetenv(authorTimeKey) //nolint:errcheck
 
 	args := []string{"commit-tree", "-m", message}
 
-	if currentGitID != "" {
-		args = append(args, "-p", currentGitID)
+	if !currentGitID.IsZero() {
+		args = append(args, "-p", currentGitID.String())
 	}
 
 	if sign {
 		args = append(args, "-S")
 	}
 
-	args = append(args, treeID)
+	args = append(args, treeID.String())
 
 	stdOut, stdErr, err := r.executeGitCommand(args...)
 	if err != nil {
-		return "", fmt.Errorf("unable to create commit: %s", stdErr)
+		return ZeroHash, fmt.Errorf("unable to create commit: %s", stdErr)
 	}
-	commitID := strings.TrimSpace(stdOut)
+	commitID, err := NewHash(strings.TrimSpace(stdOut))
+	if err != nil {
+		return ZeroHash, fmt.Errorf("received invalid commit ID: %w", err)
+	}
 
 	return commitID, r.CheckAndSetReference(targetRef, commitID, currentGitID)
 }
@@ -207,13 +210,13 @@ func VerifyCommitSignature(ctx context.Context, commit *object.Commit, key *tuf.
 	return ErrUnknownSigningMethod
 }
 
-func (r *Repository) VerifyCommitSignature(ctx context.Context, commitID string, key *tuf.Key) error {
+func (r *Repository) VerifyCommitSignature(ctx context.Context, commitID Hash, key *tuf.Key) error {
 	goGitRepo, err := git.PlainOpen(r.gitDirPath)
 	if err != nil {
 		return fmt.Errorf("error opening repository: %w", err)
 	}
 
-	commit, err := goGitRepo.CommitObject(plumbing.NewHash(commitID))
+	commit, err := goGitRepo.CommitObject(plumbing.NewHash(commitID.String()))
 	if err != nil {
 		return fmt.Errorf("unable to load commit object: %w", err)
 	}

@@ -21,6 +21,14 @@ type Hash struct {
 	hash string
 }
 
+func (h Hash) String() string {
+	return h.hash
+}
+
+func (h Hash) IsZero() bool {
+	return h == ZeroHash
+}
+
 var ZeroHash = Hash{hash: zeroSHA1HashString}
 
 func NewHash(h string) (Hash, error) {

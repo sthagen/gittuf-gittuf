@@ -84,7 +84,7 @@ func TestRepositoryReadBlob(t *testing.T) {
 	repo := createTestGitRepository(t, tempDir)
 
 	contents := []byte("test file read")
-	expectedBlobID := "2ecdd330475d93568ed27f717a84a7fe207d1c58"
+	expectedBlobID := Hash{hash: "2ecdd330475d93568ed27f717a84a7fe207d1c58"}
 
 	blobID, err := repo.WriteBlob(contents)
 	if err != nil {
@@ -99,7 +99,7 @@ func TestRepositoryReadBlob(t *testing.T) {
 	})
 
 	t.Run("read non-existing blob", func(t *testing.T) {
-		_, err := repo.ReadBlob(zeroSHA1HashString)
+		_, err := repo.ReadBlob(ZeroHash)
 		assert.NotNil(t, err)
 	})
 }
@@ -143,7 +143,7 @@ func TestRepositoryWriteBlob(t *testing.T) {
 	repo := &Repository{gitDirPath: path.Join(tempDir, ".git")}
 
 	contents := []byte("test file write")
-	expectedBlobID := "999c05e9578e5d244920306842f516789a2498f7"
+	expectedBlobID := Hash{hash: "999c05e9578e5d244920306842f516789a2498f7"}
 
 	blobID, err := repo.WriteBlob(contents)
 	assert.Nil(t, err)

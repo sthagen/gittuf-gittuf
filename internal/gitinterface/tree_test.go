@@ -109,7 +109,7 @@ func TestGetRepositoryAllFilesInTree(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectedFiles := map[string]string{
+	expectedFiles := map[string]Hash{
 		"foo":            emptyBlobID,
 		"bar/foo":        emptyBlobID,
 		"foobar/foo/bar": emptyBlobID,
@@ -308,7 +308,7 @@ func TestReplacementTreeBuilder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	emptyTreeID := "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+	emptyTreeID := Hash{hash: "4b825dc642cb6eb9a060e54bf8d69288fbee4904"}
 
 	t.Run("no blobs", func(t *testing.T) {
 		treeBuilder := NewReplacementTreeBuilder(repo)
@@ -316,7 +316,7 @@ func TestReplacementTreeBuilder(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, emptyTreeID, treeID)
 
-		treeID, err = treeBuilder.WriteRootTreeFromBlobIDs(map[string]string{})
+		treeID, err = treeBuilder.WriteRootTreeFromBlobIDs(map[string]Hash{})
 		assert.Nil(t, err)
 		assert.Equal(t, emptyTreeID, treeID)
 	})
@@ -324,7 +324,7 @@ func TestReplacementTreeBuilder(t *testing.T) {
 	t.Run("both blobs in the root directory", func(t *testing.T) {
 		treeBuilder := NewReplacementTreeBuilder(repo)
 
-		input := map[string]string{
+		input := map[string]Hash{
 			"a": blobAID,
 			"b": blobBID,
 		}
@@ -343,7 +343,7 @@ func TestReplacementTreeBuilder(t *testing.T) {
 	t.Run("both blobs in same subdirectory", func(t *testing.T) {
 		treeBuilder := NewReplacementTreeBuilder(repo)
 
-		input := map[string]string{
+		input := map[string]Hash{
 			"dir/a": blobAID,
 			"dir/b": blobBID,
 		}
@@ -362,7 +362,7 @@ func TestReplacementTreeBuilder(t *testing.T) {
 	t.Run("both blobs in different subdirectories", func(t *testing.T) {
 		treeBuilder := NewReplacementTreeBuilder(repo)
 
-		input := map[string]string{
+		input := map[string]Hash{
 			"foo/a": blobAID,
 			"bar/b": blobBID,
 		}
@@ -381,7 +381,7 @@ func TestReplacementTreeBuilder(t *testing.T) {
 	t.Run("blobs in mix of root directory and subdirectories", func(t *testing.T) {
 		treeBuilder := NewReplacementTreeBuilder(repo)
 
-		input := map[string]string{
+		input := map[string]Hash{
 			"a":                blobAID,
 			"foo/bar/foobar/b": blobBID,
 		}
