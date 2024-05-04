@@ -352,6 +352,18 @@ func KnowsCommit(repo *git.Repository, commitID plumbing.Hash, commit *object.Co
 	return commit.IsAncestor(commitUnderTest)
 }
 
+func (r *Repository) KnowsCommit(testCommitID, ancestorCommitID Hash) (bool, error) {
+	if err := r.ensureIsCommit(testCommitID); err != nil {
+		return false, err
+	}
+	if err := r.ensureIsCommit(ancestorCommitID); err != nil {
+		return false, err
+	}
+
+	_, _, err := r.executeGitCommand("merge-base", "--is-ancestor", ancestorCommitID.String(), testCommitID.String())
+	return err == nil, nil
+}
+
 // GetCommit returns the requested commit object.
 func GetCommit(repo *git.Repository, commitID plumbing.Hash) (*object.Commit, error) {
 	return repo.CommitObject(commitID)
