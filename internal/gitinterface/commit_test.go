@@ -36,7 +36,7 @@ var (
 
 func TestRepositoryCommit(t *testing.T) {
 	tempDir := t.TempDir()
-	repo := createTestGitRepository(t, tempDir)
+	repo := CreateTestGitRepository(t, tempDir)
 
 	refName := "refs/heads/main"
 	treeBuilder := NewReplacementTreeBuilder(repo)
@@ -250,7 +250,7 @@ func TestRepositoryVerifyCommit(t *testing.T) {
 	// TODO: support multiple signing types
 
 	tempDir := t.TempDir()
-	repo := createTestGitRepository(t, tempDir)
+	repo := CreateTestGitRepository(t, tempDir)
 
 	treeBuilder := NewReplacementTreeBuilder(repo)
 
@@ -439,7 +439,7 @@ func createTestSSHSignedCommits(t *testing.T) []*object.Commit {
 
 func TestRepositoryGetCommitMessage(t *testing.T) {
 	tempDir := t.TempDir()
-	repo := createTestGitRepository(t, tempDir)
+	repo := CreateTestGitRepository(t, tempDir)
 
 	refName := "refs/heads/main"
 	treeBuilder := NewReplacementTreeBuilder(repo)

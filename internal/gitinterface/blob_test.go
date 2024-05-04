@@ -5,7 +5,6 @@ package gitinterface
 import (
 	"fmt"
 	"io"
-	"path"
 	"testing"
 
 	"github.com/go-git/go-billy/v5/memfs"
@@ -81,7 +80,7 @@ func TestReadBlob(t *testing.T) {
 
 func TestRepositoryReadBlob(t *testing.T) {
 	tempDir := t.TempDir()
-	repo := createTestGitRepository(t, tempDir)
+	repo := CreateTestGitRepository(t, tempDir)
 
 	contents := []byte("test file read")
 	expectedBlobID := Hash{hash: "2ecdd330475d93568ed27f717a84a7fe207d1c58"}
@@ -139,8 +138,7 @@ func TestWriteBlob(t *testing.T) {
 
 func TestRepositoryWriteBlob(t *testing.T) {
 	tempDir := t.TempDir()
-	createTestGitRepository(t, tempDir)
-	repo := &Repository{gitDirPath: path.Join(tempDir, ".git")}
+	repo := CreateTestGitRepository(t, tempDir)
 
 	contents := []byte("test file write")
 	expectedBlobID := Hash{hash: "999c05e9578e5d244920306842f516789a2498f7"}
@@ -160,7 +158,7 @@ func TestEmptyBlob(t *testing.T) {
 
 func TestRepositoryEmptyBlob(t *testing.T) {
 	tempDir := t.TempDir()
-	repo := createTestGitRepository(t, tempDir)
+	repo := CreateTestGitRepository(t, tempDir)
 
 	hash, err := repo.EmptyBlob()
 	assert.Nil(t, err)

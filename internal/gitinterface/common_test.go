@@ -33,7 +33,7 @@ var (
 	testClock = clockwork.NewFakeClockAt(time.Date(1995, time.October, 26, 9, 0, 0, 0, time.UTC))
 )
 
-func createTestGitRepository(t *testing.T, dir string) *Repository {
+func CreateTestGitRepository(t *testing.T, dir string) *Repository {
 	t.Helper()
 
 	keysDir := t.TempDir()
