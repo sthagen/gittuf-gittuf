@@ -101,6 +101,10 @@ func (r *Repository) GetAllFilesInTree(treeID Hash) (map[string]Hash, error) {
 	}
 	stdOut = strings.TrimSpace(stdOut)
 
+	if stdOut == "" {
+		return nil, nil // alternatively, just check if treeID is empty tree?
+	}
+
 	entries := strings.Split(stdOut, "\n")
 	if len(entries) == 0 {
 		return nil, nil
