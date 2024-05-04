@@ -258,19 +258,55 @@ func (r *Repository) VerifyCommitSignature(ctx context.Context, commitID Hash, k
 }
 
 func (r *Repository) GetCommitMessage(commitID Hash) (string, error) {
-	stdOut, stdErr, err := r.executeGitCommand("cat-file", "-t", commitID.String())
-	if err != nil {
-		return "", fmt.Errorf("unable to inspect if object is commit: %s", stdErr)
-	} else if strings.TrimSpace(stdOut) != "commit" {
-		return "", fmt.Errorf("requested Git ID '%s' is not a commit object", commitID.String())
+	if err := r.ensureIsCommit(commitID); err != nil {
+		return "", err
 	}
 
-	stdOut, stdErr, err = r.executeGitCommand("show", "-s", "--format=%B", commitID.String())
+	stdOut, stdErr, err := r.executeGitCommand("show", "-s", "--format=%B", commitID.String())
 	if err != nil {
 		return "", fmt.Errorf("unable to identify message for commit '%s': %s", commitID.String(), stdErr)
 	}
 
 	return strings.TrimSpace(stdOut), nil
+}
+
+func (r *Repository) GetCommitParentIDs(commitID Hash) ([]Hash, error) {
+	if err := r.ensureIsCommit(commitID); err != nil {
+		return nil, err
+	}
+
+	stdOut, stdErr, err := r.executeGitCommand("show", "-s", "--format=%P", commitID.String())
+	if err != nil {
+		return nil, fmt.Errorf("unable to identify parents for commit '%s': %s", commitID.String(), stdErr)
+	}
+
+	commitIDSplit := strings.Split(strings.TrimSpace(stdOut), " ")
+	if len(commitIDSplit) == 0 {
+		return nil, nil
+	}
+
+	commitIDs := []Hash{}
+	for _, commitID := range commitIDSplit {
+		hash, err := NewHash(commitID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid parent commit ID '%s': %w", commitID, err)
+		}
+
+		commitIDs = append(commitIDs, hash)
+	}
+
+	return commitIDs, nil
+}
+
+func (r *Repository) ensureIsCommit(commitID Hash) error {
+	stdOut, stdErr, err := r.executeGitCommand("cat-file", "-t", commitID.String())
+	if err != nil {
+		return fmt.Errorf("unable to inspect if object is commit: %s", stdErr)
+	} else if strings.TrimSpace(stdOut) != "commit" {
+		return fmt.Errorf("requested Git ID '%s' is not a commit object", commitID.String())
+	}
+
+	return nil
 }
 
 // CreateCommitObject returns a commit object using the specified parameters.
