@@ -5,6 +5,11 @@
 // the most definitive docs for something like this.
 // Annotating where I think gittuf would plug in
 
+// Sources:
+// https://rovaughn.github.io/2015-2-9.html
+// https://github.com/keybase/client/blob/master/go/kbfs/kbfsgit/runner.go
+// https://github.com/spwhitton/git-remote-gcrypt/blob/master/git-remote-gcrypt
+
 package main
 
 import (
@@ -14,7 +19,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"path"
 	"strings"
 )
 
@@ -25,100 +30,49 @@ func run() (reterr error) {
 		return fmt.Errorf("usage: %s <remote-name> <url>", os.Args[0])
 	}
 
-	var gitDir string
-
-	gitDirEnv := os.Getenv("GIT_DIR")
-	if gitDirEnv == "" {
-		cmd := exec.Command("git", "rev-parse", "--git-dir")
-		output, err := cmd.Output()
-		if err != nil {
-			return fmt.Errorf("unable to identify GIT_DIR")
-		}
-
-		gitDir = strings.TrimSpace(string(output))
-	} else {
-		gitDir = gitDirEnv
-	}
-
-	remoteName := os.Args[1]
 	url := os.Args[2]
 
-	localTransportDir := filepath.Join(gitDir, "gittuf", remoteName)
-	if err := os.MkdirAll(localTransportDir, 0o755); err != nil {
-		return fmt.Errorf("unable to make transport directory: %w", err)
-	}
-
 	refSpecs := []string{
-		fmt.Sprintf("refs/heads/*:refs/gittuf-transport/%s/heads/*", remoteName),
+		"refs/heads/*:refs/heads/*",
 		"refs/gittuf/*:refs/gittuf/*",
 	}
 
-	// how does this work for remotes over the network?
-	// if err := os.Setenv("GIT_DIR", path.Join(url, ".git")); err != nil {
-	// 	return err
-	// }
-
-	// gitMarks := filepath.Join(localTransportDir, "git.marks")
-	// gittufTransportMarks := filepath.Join(localTransportDir, "gittuf.marks")
-
-	// if err := touch(gitMarks); err != nil {
-	// 	return err
-	// }
-	// if err := touch(gittufTransportMarks); err != nil {
-	// 	return err
-	// }
-
-	// originalGitMarks, err := os.ReadFile(gitMarks)
-	// if err != nil {
-	// 	return err
-	// }
-	// originalGittufTransportMarks, err := os.ReadFile(gittufTransportMarks)
-	// if err != nil {
-	// 	return err
-	// }
-
-	// defer func() {
-	// 	log("writing original marks files")
-	// 	if reterr != nil {
-	// 		os.WriteFile(gitMarks, originalGitMarks, 0o666)
-	// 		os.WriteFile(gittufTransportMarks, originalGittufTransportMarks, 0o666)
-	// 	}
-	// }()
-
 	stdInReader := bufio.NewReader(os.Stdin)
 
-	log("entering loop")
+	log("entering helper loop")
 	for {
 		command, err := stdInReader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("unable to read command from stdin: %w", err)
 		}
 
-		log("command: " + strings.TrimSpace(command))
+		if command != "\n" {
+			log("command: " + strings.TrimSpace(command))
+		}
 
-		// where is the remote loop on the refs/gittuf/reference-state-log?
-		// we need to know our entries are after upstream pushes
 		switch {
 		case command == "capabilities\n":
 			logAndWrite("fetch\n")
 			logAndWrite("push\n")
-			// logAndWrite("import\n")
-			// logAndWrite("export\n")
 			for _, refSpec := range refSpecs {
 				logAndWrite(fmt.Sprintf("refspec %s\n", refSpec))
 			}
-			// logAndWrite(fmt.Sprintf("*import-marks %s\n", gitMarks))
-			// logAndWrite(fmt.Sprintf("*export-marks %s\n", gitMarks))
 
 			fmt.Fprintf(os.Stdout, "\n")
 
 		case command == "list\n", command == "list for-push\n":
-			refs, err := gitListRefs()
+			// this is likely problematic, I'm not sure i fully understand where
+			// this is expected to be run
+			// when `list`-ing for `fetch`, is this listing the remote's refs?
+			// we need to solve the "actual" transport to make sense of this
+			// also, all of this is naturally only for a "smart" protocol?
+
+			refs, err := gitListRefs(path.Join(url, ".git"))
 			if err != nil {
 				return fmt.Errorf("error listing remote refs: %w", err)
 			}
 
-			head, err := gitSymbolicRef("HEAD")
+			head, err := gitSymbolicRef("HEAD", path.Join(url, ".git"))
 			if err != nil {
 				return fmt.Errorf("error resolving HEAD: %w", err)
 			}
@@ -131,8 +85,15 @@ func run() (reterr error) {
 			fmt.Fprintf(os.Stdout, "\n")
 
 		case strings.HasPrefix(command, "fetch "):
-			refs := []string{"refs/gittuf/reference-state-log", "refs/gittuf/policy", "refs/gittuf/policy-staging", "refs/gittuf/attestations"}
+			gittufRefs := []string{
+				"refs/gittuf/reference-state-log",
+				"refs/gittuf/policy",
+				"refs/gittuf/policy-staging",
+				"refs/gittuf/attestations",
+			}
 			requestedRefs := []string{}
+
+			// this may fetch too many refs, not just the default as it lists remote-refs
 
 			for {
 				fetchRequest := strings.TrimSpace(strings.TrimPrefix(command, "fetch "))
@@ -142,6 +103,7 @@ func run() (reterr error) {
 					return fmt.Errorf("malformed fetch request: %s", fetchRequest)
 				}
 
+				log("fetch request: " + fetchRequest)
 				requestedRefs = append(requestedRefs, parts[1])
 
 				command, err = stdInReader.ReadString('\n')
@@ -161,8 +123,11 @@ func run() (reterr error) {
 			}
 
 			log("invoking fetch-pack")
+			// fetch pack looks at refs rather than src:dst refspec
+			// it's populating the object store, so this makes sense
+			// we have to update local refs ourselves with update-ref after?
 			args := []string{"fetch-pack", url}
-			args = append(args, refs...)
+			args = append(args, gittufRefs...)
 			args = append(args, requestedRefs...)
 			log(strings.Join(args, " "))
 			cmd := exec.Command("git", args...)
@@ -171,6 +136,30 @@ func run() (reterr error) {
 
 			if err := cmd.Run(); err != nil {
 				return fmt.Errorf("unable to execute fetch-pack: %w", err)
+			}
+
+			// don't we need to be able to list / for-each-ref on the remote to
+			// learn what to set locals to?
+			targetRefs, err := gitListRefs(path.Join(url, ".git"))
+			if err != nil {
+				return fmt.Errorf("unable to list remote refs: %w", err)
+			}
+
+			for _, ref := range append(gittufRefs, requestedRefs...) {
+				targetObj, listed := targetRefs[ref]
+				if !listed {
+					// remote doesn't have this ref??
+					continue
+				}
+
+				args := []string{"update-ref", ref, targetObj} // should also include oldOid for checkandsetref...
+				cmd := exec.Command("git", args...)
+				cmd.Stderr = os.Stderr
+				cmd.Stdout = os.Stdout
+
+				if err := cmd.Run(); err != nil {
+					return fmt.Errorf("unable to update local ref '%s': %w", ref, err)
+				}
 			}
 
 			fmt.Fprintf(os.Stdout, "\n")
@@ -223,113 +212,6 @@ func run() (reterr error) {
 
 			fmt.Fprintf(os.Stdout, "\n")
 
-		// case strings.HasPrefix(command, "import "):
-		// 	// This is old, will remove
-		// 	// import recreates commits locally, breaks sigs
-
-		// 	refs := []string{"refs/gittuf/reference-state-log", "refs/gittuf/policy", "refs/gittuf/policy-staging", "refs/gittuf/attestations"}
-
-		// 	requestedRefs := []string{}
-
-		// 	for {
-		// 		ref := strings.TrimSpace(strings.TrimPrefix(command, "import "))
-		// 		refs = append(refs, ref)
-		// 		requestedRefs = append(requestedRefs, ref)
-
-		// 		command, err = stdInReader.ReadString('\n')
-		// 		if err != nil {
-		// 			return fmt.Errorf("unable to read command from stdin: %w", err)
-		// 		}
-
-		// 		log("import command: " + strings.TrimSpace(command))
-
-		// 		if command == "\n" {
-		// 			break
-		// 		}
-
-		// 		if !strings.HasPrefix(command, "import ") {
-		// 			return fmt.Errorf("received non import command in import batch: '%s'", command)
-		// 		}
-		// 	}
-
-		// 	// should refs always include `refs/gittuf/*` here?
-
-		// 	logAndWrite(fmt.Sprintf("feature import-marks=%s\n", gitMarks))
-		// 	logAndWrite(fmt.Sprintf("feature export-marks=%s\n", gitMarks))
-		// 	logAndWrite("feature done\n")
-
-		// 	args := []string{"fast-export", "--import-marks", gittufTransportMarks, "--export-marks", gittufTransportMarks}
-		// 	for _, refSpec := range refSpecs {
-		// 		args = append(args, "--refspec", refSpec)
-		// 	}
-		// 	args = append(args, refs...)
-		// 	log(strings.Join(args, " "))
-
-		// 	cmd := exec.Command("git", args...)
-		// 	cmd.Stderr = os.Stderr
-		// 	cmd.Stdout = os.Stdout
-
-		// 	if err := cmd.Run(); err != nil {
-		// 		return fmt.Errorf("unable to execute fast-export: %w", err)
-		// 	}
-
-		// 	logAndWrite("done\n")
-
-		// 	for _, ref := range requestedRefs {
-		// 		if err := exec.Command("gittuf", "verify-ref", ref).Run(); err != nil {
-		// 			return fmt.Errorf("error verifying gittuf policies: %w", err)
-		// 		}
-		// 	}
-
-		// case command == "export\n":
-		// 	// This is old, will remove
-		// 	// export recreates commits on remote, breaks sigs
-
-		// 	// AIUI, this is for exporting on push etc
-		// 	// we want to record an RSL entry if signed push isn't enabled
-		// 	// we want to verify what we're pushing
-		// 	beforeRefs, err := gitListRefs()
-		// 	if err != nil {
-		// 		return fmt.Errorf("unable to collect refs: %w", err)
-		// 	}
-
-		// 	s := []string{}
-		// 	for key, val := range beforeRefs {
-		// 		s = append(s, key+" "+val)
-		// 	}
-		// 	log("beforeRefs: " + strings.Join(s, ", "))
-
-		// 	args := []string{"fast-import", "--quiet", "--import-marks=" + gittufTransportMarks, "--export-marks=" + gittufTransportMarks}
-		// 	log(strings.Join(args, " "))
-		// 	cmd := exec.Command("git", args...)
-		// 	cmd.Stderr = os.Stderr
-		// 	cmd.Stdout = os.Stdout
-
-		// 	if err := cmd.Run(); err != nil {
-		// 		return fmt.Errorf("unable to execute fast-import: %w", err)
-		// 	}
-
-		// 	afterRefs, err := gitListRefs()
-		// 	if err != nil {
-		// 		return fmt.Errorf("unable to collect refs: %w", err)
-		// 	}
-
-		// 	s = []string{}
-		// 	for key, val := range beforeRefs {
-		// 		s = append(s, key+" "+val)
-		// 	}
-		// 	log("afterRefs: " + strings.Join(s, ", "))
-
-		// 	for refName, objectID := range afterRefs {
-		// 		// check assumptions about unknown refs here
-		// 		// also, evaluate where refs/gittuf/* gets plugged in
-		// 		if beforeRefs[refName] != objectID {
-		// 			logAndWrite(fmt.Sprintf("ok %s\n", refName))
-		// 		}
-		// 	}
-
-		// 	fmt.Fprintf(os.Stdout, "\n")
-
 		case command == "\n":
 			return nil
 
@@ -339,20 +221,8 @@ func run() (reterr error) {
 	}
 }
 
-func touch(filePath string) error {
-	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o666)
-	if os.IsExist(err) {
-		return nil
-	} else if err != nil {
-		return err
-	}
-
-	return file.Close()
-}
-
-func gitListRefs() (map[string]string, error) {
-	log("gitDir: " + os.Getenv("GIT_DIR"))
-	output, err := exec.Command("git", "for-each-ref", "--format=%(objectname) %(refname)", "refs/heads/").Output()
+func gitListRefs(gitDir string) (map[string]string, error) {
+	output, err := exec.Command("git", "--git-dir", gitDir, "for-each-ref", "--format=%(objectname) %(refname)", "refs/heads/").Output()
 	if err != nil {
 		return nil, fmt.Errorf("unable to list refs: %w", err)
 	}
@@ -373,10 +243,10 @@ func gitListRefs() (map[string]string, error) {
 	return refs, nil
 }
 
-func gitSymbolicRef(name string) (string, error) {
-	output, err := exec.Command("git", "symbolic-ref", name).Output()
+func gitSymbolicRef(name, gitDir string) (string, error) {
+	output, err := exec.Command("git", "--git-dir", gitDir, "symbolic-ref", name).Output()
 	if err != nil {
-		return "", fmt.Errorf("unable to resolve symbolic ref: %w", err)
+		return "", fmt.Errorf("unable to resolve symbolic ref: %s", string(err.(*exec.ExitError).Stderr))
 	}
 
 	return string(bytes.TrimSpace(output)), nil
@@ -388,7 +258,9 @@ func logAndWrite(message string) {
 }
 
 func log(message string) {
-	fmt.Fprint(logFile, message+"\n")
+	if logFile != nil {
+		fmt.Fprint(logFile, message+"\n")
+	}
 }
 
 func main() {
