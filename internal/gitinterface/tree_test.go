@@ -67,6 +67,18 @@ func TestEmptyTree(t *testing.T) {
 	assert.Equal(t, "4b825dc642cb6eb9a060e54bf8d69288fbee4904", hash.String())
 }
 
+func TestRepositoryEmptyTree(t *testing.T) {
+	tempDir := t.TempDir()
+	repo := createTestGitRepository(t, tempDir)
+
+	hash, err := repo.EmptyTree()
+	assert.Nil(t, err)
+
+	// SHA-1 ID used by Git to denote an empty tree
+	// $ git hash-object -t tree --stdin < /dev/null
+	assert.Equal(t, Hash{hash: "4b825dc642cb6eb9a060e54bf8d69288fbee4904"}, hash)
+}
+
 func TestGetAllFilesInTree(t *testing.T) {
 	repo, err := git.Init(memory.NewStorage(), memfs.New())
 	if err != nil {

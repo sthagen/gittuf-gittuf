@@ -98,3 +98,17 @@ func EmptyBlob() plumbing.Hash {
 
 	return obj.Hash()
 }
+
+func (r *Repository) EmptyBlob() (Hash, error) {
+	stdOut, stdErr, err := r.executeGitCommandWithStdIn(nil, "hash-object", "-t", "blob", "--stdin")
+	if err != nil {
+		return ZeroHash, fmt.Errorf("unable to hash empty blob: %s", stdErr)
+	}
+
+	hash, err := NewHash(strings.TrimSpace(stdOut))
+	if err != nil {
+		return ZeroHash, fmt.Errorf("empty blob has invalid Git ID: %w", err)
+	}
+
+	return hash, nil
+}

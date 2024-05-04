@@ -51,6 +51,20 @@ func EmptyTree() plumbing.Hash {
 	return obj.Hash()
 }
 
+func (r *Repository) EmptyTree() (Hash, error) {
+	stdOut, stdErr, err := r.executeGitCommandWithStdIn(nil, "hash-object", "-t", "tree", "--stdin")
+	if err != nil {
+		return ZeroHash, fmt.Errorf("unable to hash empty tree: %s", stdErr)
+	}
+
+	hash, err := NewHash(strings.TrimSpace(stdOut))
+	if err != nil {
+		return ZeroHash, fmt.Errorf("empty tree has invalid Git ID: %w", err)
+	}
+
+	return hash, nil
+}
+
 // GetAllFilesInTree returns all filepaths and the corresponding hash in the
 // specified tree.
 func GetAllFilesInTree(tree *object.Tree) (map[string]plumbing.Hash, error) {
