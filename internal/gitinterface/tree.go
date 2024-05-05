@@ -159,6 +159,31 @@ func GetMergeTree(repo *git.Repository, commitAID, commitBID string) (string, er
 	return stdOutString, nil
 }
 
+func (r *Repository) GetMergeTree(commitAID, commitBID Hash) (Hash, error) {
+	if err := r.ensureIsCommit(commitAID); err != nil {
+		return ZeroHash, err
+	}
+	if err := r.ensureIsCommit(commitBID); err != nil {
+		return ZeroHash, err
+	}
+
+	if commitAID.IsZero() {
+		return r.GetCommitTreeID(commitBID)
+	}
+
+	stdOut, stdErr, err := r.executeGitCommand("merge-tree", commitAID.String(), commitBID.String())
+	if err != nil {
+		return ZeroHash, fmt.Errorf("unable to compute merge tree: %s", stdErr)
+	}
+
+	treeHash, err := NewHash(strings.TrimSpace(stdOut))
+	if err != nil {
+		return ZeroHash, fmt.Errorf("invalid merge tree ID: %w", err)
+	}
+
+	return treeHash, nil
+}
+
 // TreeBuilder is used to create multi-level trees in a repository.
 // Based on `buildTreeHelper` in go-git.
 type TreeBuilder struct {
