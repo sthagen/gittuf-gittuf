@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/gittuf/gittuf/internal/dev"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
@@ -107,10 +106,6 @@ func GetFilePathsChangedByCommit(repo *git.Repository, commit *object.Commit) ([
 }
 
 func (r *Repository) GetFilePathsChangedByCommit(commitID Hash) ([]string, error) {
-	if !dev.InDevMode() {
-		return nil, dev.ErrNotInDevMode
-	}
-
 	if err := r.ensureIsCommit(commitID); err != nil {
 		return nil, err
 	}
