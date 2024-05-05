@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/go-git/go-git/v5"
 	"github.com/jonboulle/clockwork"
 )
 
@@ -21,6 +22,10 @@ const (
 type Repository struct {
 	gitDirPath string
 	clock      clockwork.Clock
+}
+
+func (r *Repository) GetGoGitRepository() (*git.Repository, error) {
+	return git.PlainOpenWithOptions(r.gitDirPath, &git.PlainOpenOptions{DetectDotGit: true})
 }
 
 func LoadRepository() (*Repository, error) {

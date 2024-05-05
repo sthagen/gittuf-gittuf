@@ -211,7 +211,7 @@ func VerifyCommitSignature(ctx context.Context, commit *object.Commit, key *tuf.
 }
 
 func (r *Repository) VerifyCommitSignature(ctx context.Context, commitID Hash, key *tuf.Key) error {
-	goGitRepo, err := git.PlainOpen(r.gitDirPath)
+	goGitRepo, err := r.GetGoGitRepository()
 	if err != nil {
 		return fmt.Errorf("error opening repository: %w", err)
 	}
