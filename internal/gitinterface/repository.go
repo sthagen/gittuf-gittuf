@@ -28,6 +28,10 @@ func (r *Repository) GetGoGitRepository() (*git.Repository, error) {
 	return git.PlainOpenWithOptions(r.gitDirPath, &git.PlainOpenOptions{DetectDotGit: true})
 }
 
+func (r *Repository) GetGitDir() string {
+	return r.gitDirPath
+}
+
 func LoadRepository() (*Repository, error) {
 	envVar := os.Getenv("GIT_DIR")
 	if envVar != "" {
