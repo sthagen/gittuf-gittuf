@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-git/v5"
@@ -158,6 +159,29 @@ func (r *Repository) Fetch(ctx context.Context, remoteName string, refs []string
 	}
 
 	return r.FetchRefSpec(ctx, remoteName, refSpecs)
+}
+
+func CloneAndFetchRepository(ctx context.Context, remoteURL, dir, initialBranch string, refs []string) (*Repository, error) {
+	if dir == "" {
+		return nil, fmt.Errorf("target directory must be specified")
+	}
+
+	repo := &Repository{}
+
+	args := []string{"clone", remoteURL}
+	if initialBranch != "" {
+		args = append(args, "--branch", initialBranch)
+	}
+	args = append(args, dir)
+
+	_, stdErr, err := repo.executeGitCommandDirect(args...)
+	if err != nil {
+		return nil, fmt.Errorf("unable to clone repository: %s", stdErr)
+	}
+
+	repo.gitDirPath = path.Join(dir, ".git")
+
+	return repo, repo.Fetch(ctx, DefaultRemoteName, refs, true)
 }
 
 // CloneAndFetch clones a repository using the specified URL and additionally
