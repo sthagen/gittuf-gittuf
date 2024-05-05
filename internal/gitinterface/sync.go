@@ -206,6 +206,15 @@ func CloneAndFetchToMemory(ctx context.Context, remoteURL, initialBranch string,
 	return fetchRefs(ctx, repo, refs, true)
 }
 
+func (r *Repository) CreateRemote(remoteName, remoteURL string) error {
+	_, stdErr, err := r.executeGitCommand("remote", "add", remoteName, remoteURL)
+	if err != nil {
+		return fmt.Errorf("unable to add remote: %s", stdErr)
+	}
+
+	return nil
+}
+
 func createCloneOptions(remoteURL, initialBranch string) *git.CloneOptions {
 	cloneOptions := &git.CloneOptions{
 		URL:      remoteURL,
