@@ -5,6 +5,7 @@ package gitinterface
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 
@@ -167,4 +168,15 @@ func getTagBytesWithoutSignature(tag *object.Tag) ([]byte, error) {
 	}
 
 	return io.ReadAll(r)
+}
+
+func (r *Repository) ensureIsTag(tagID Hash) error {
+	stdOut, stdErr, err := r.executeGitCommand("cat-file", "-t", tagID.String())
+	if err != nil {
+		return fmt.Errorf("unable to inspect if object is tag: %s", stdErr)
+	} else if strings.TrimSpace(stdOut) != "tag" {
+		return fmt.Errorf("requested Git ID '%s' is not a tag object", tagID.String())
+	}
+
+	return nil
 }

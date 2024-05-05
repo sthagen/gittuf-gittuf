@@ -5,6 +5,7 @@ package gitinterface
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/go-git/go-billy/v5/memfs"
@@ -60,6 +61,27 @@ func Push(ctx context.Context, repo *git.Repository, remoteName string, refs []s
 	return PushRefSpec(ctx, repo, remoteName, refSpecs)
 }
 
+func (r *Repository) Push(ctx context.Context, remoteName string, refs []string) error {
+	refSpecs := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		refSpec, err := r.RefSpec(ref, "", true)
+		if err != nil {
+			return err
+		}
+		refSpecs = append(refSpecs, refSpec)
+	}
+
+	args := []string{"push", remoteName}
+	args = append(args, refSpecs...)
+
+	_, stdErr, err := r.executeGitCommand(args...)
+	if err != nil {
+		return fmt.Errorf("unable to push: %s", stdErr)
+	}
+
+	return nil
+}
+
 // FetchRefSpec fetches to the repo from the specified remote using
 // pre-constructed refspecs. For more information on the Git refspec, please
 // consult: https://git-scm.com/book/en/v2/Git-Internals-The-Refspec.
@@ -107,6 +129,27 @@ func Fetch(ctx context.Context, repo *git.Repository, remoteName string, refs []
 	}
 
 	return FetchRefSpec(ctx, repo, remoteName, refSpecs)
+}
+
+func (r *Repository) Fetch(ctx context.Context, remoteName string, refs []string, fastForwardOnly bool) error {
+	refSpecs := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		refSpec, err := r.RefSpec(ref, "", fastForwardOnly)
+		if err != nil {
+			return err
+		}
+		refSpecs = append(refSpecs, refSpec)
+	}
+
+	args := []string{"fetch", remoteName}
+	args = append(args, refSpecs...)
+
+	_, stdErr, err := r.executeGitCommand(args...)
+	if err != nil {
+		return fmt.Errorf("unable to fetch: %s", stdErr)
+	}
+
+	return nil
 }
 
 // CloneAndFetch clones a repository using the specified URL and additionally

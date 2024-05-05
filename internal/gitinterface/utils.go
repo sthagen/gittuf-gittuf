@@ -124,6 +124,42 @@ func AbsoluteReference(repo *git.Repository, target string) (string, error) {
 	return "", plumbing.ErrReferenceNotFound
 }
 
+func (r *Repository) AbsoluteReference(target string) (string, error) {
+	if strings.HasPrefix(target, RefPrefix) {
+		return target, nil
+	}
+
+	if target == "HEAD" {
+		stdOut, stdErr, err := r.executeGitCommand("symbolic-ref", "HEAD")
+		if err != nil {
+			return "", fmt.Errorf("unable to resolve HEAD: %s", stdErr)
+		}
+		return strings.TrimSpace(stdOut), nil
+	}
+
+	// Check if branch
+	branchName := fmt.Sprintf("%s/%s", BranchRefPrefix, target)
+	_, err := r.GetReference(branchName)
+	if err == nil {
+		return branchName, nil
+	}
+	if !errors.Is(err, ErrReferenceNotFound) {
+		return "", err
+	}
+
+	// Check if tag
+	tagName := fmt.Sprintf("%s/%s", TagRefPrefix, target)
+	_, err = r.GetReference(tagName)
+	if err == nil {
+		return tagName, nil
+	}
+	if !errors.Is(err, ErrReferenceNotFound) {
+		return "", err
+	}
+
+	return "", ErrReferenceNotFound
+}
+
 // RefSpec creates a Git refspec for the specified ref.  For more information on
 // the Git refspec, please consult:
 // https://git-scm.com/book/en/v2/Git-Internals-The-Refspec.
@@ -162,6 +198,43 @@ func RefSpec(repo *git.Repository, refName, remoteName string, fastForwardOnly b
 	}
 
 	return config.RefSpec(refSpecString), nil
+}
+
+func (r *Repository) RefSpec(refName, remoteName string, fastForwardOnly bool) (string, error) {
+	var (
+		refPath string
+		err     error
+	)
+
+	refPath = refName
+	if !strings.HasPrefix(refPath, RefPrefix) {
+		refPath, err = r.AbsoluteReference(refName)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	if strings.HasPrefix(refPath, TagRefPrefix) {
+		// TODO: check if this is correct, AFAICT tags aren't tracked in the
+		// remotes namespace.
+		fastForwardOnly = true
+	}
+
+	// local is always refPath, destination depends on remoteName
+	localPath := refPath
+	var remotePath string
+	if len(remoteName) > 0 {
+		remotePath = RemoteRef(refPath, remoteName)
+	} else {
+		remotePath = refPath
+	}
+
+	refSpecString := fmt.Sprintf("%s:%s", localPath, remotePath)
+	if !fastForwardOnly {
+		refSpecString = fmt.Sprintf("+%s", refSpecString)
+	}
+
+	return refSpecString, nil
 }
 
 func RemoteRef(refName, remoteName string) string {
