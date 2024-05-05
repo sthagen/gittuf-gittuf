@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/gittuf/gittuf/internal/gitinterface"
-	"github.com/go-git/go-git/v5/plumbing"
 )
 
 var (
@@ -50,14 +49,14 @@ func Clone(ctx context.Context, remoteURL, dir, initialBranch string) (*Reposito
 	refs := []string{"refs/gittuf/*"}
 
 	slog.Debug("Cloning repository...")
-	r, err := gitinterface.CloneAndFetch(ctx, remoteURL, dir, initialBranch, refs)
+	r, err := gitinterface.CloneAndFetchRepository(remoteURL, dir, initialBranch, refs)
 	if err != nil {
 		if e := os.RemoveAll(dir); e != nil {
 			return nil, errors.Join(ErrCloningRepository, err, e)
 		}
 		return nil, errors.Join(ErrCloningRepository, err)
 	}
-	head, err := r.Reference(plumbing.HEAD, false)
+	head, err := r.GetSymbolicReferenceTarget("HEAD")
 	if err != nil {
 		return nil, errors.Join(ErrCloningRepository, err)
 	}
@@ -65,5 +64,5 @@ func Clone(ctx context.Context, remoteURL, dir, initialBranch string) (*Reposito
 	repository := &Repository{r: r}
 
 	slog.Debug("Verifying HEAD...")
-	return repository, repository.VerifyRef(ctx, head.Target().String(), false)
+	return repository, repository.VerifyRef(ctx, head, false)
 }

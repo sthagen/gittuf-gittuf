@@ -11,8 +11,6 @@ import (
 	"github.com/gittuf/gittuf/internal/dev"
 	"github.com/gittuf/gittuf/internal/gitinterface"
 	"github.com/gittuf/gittuf/internal/rsl"
-	"github.com/go-git/go-git/v5/config"
-	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 )
 
@@ -26,19 +24,19 @@ var (
 // for the specified Git reference.
 func (r *Repository) RecordRSLEntryForReference(refName string, signCommit bool) error {
 	slog.Debug("Identifying absolute reference path...")
-	absRefName, err := gitinterface.AbsoluteReference(r.r, refName)
+	absRefName, err := r.r.AbsoluteReference(refName)
 	if err != nil {
 		return err
 	}
 
 	slog.Debug(fmt.Sprintf("Loading current state of '%s'...", absRefName))
-	ref, err := r.r.Reference(plumbing.ReferenceName(absRefName), true)
+	refTip, err := r.r.GetReference(absRefName)
 	if err != nil {
 		return err
 	}
 
 	slog.Debug("Checking for existing entry for reference with same target...")
-	isDuplicate, err := r.isDuplicateEntry(absRefName, ref.Hash())
+	isDuplicate, err := r.isDuplicateEntry(absRefName, refTip)
 	if err != nil {
 		return err
 	}
@@ -50,7 +48,7 @@ func (r *Repository) RecordRSLEntryForReference(refName string, signCommit bool)
 	// signCommit must be verified for the refName in the delegation tree.
 
 	slog.Debug("Creating RSL reference entry...")
-	return rsl.NewReferenceEntry(absRefName, ref.Hash()).Commit(r.r, signCommit)
+	return rsl.NewReferenceEntry(absRefName, refTip).Commit(r.r, signCommit)
 }
 
 // RecordRSLEntryForReferenceAtTarget is a special version of
@@ -63,7 +61,12 @@ func (r *Repository) RecordRSLEntryForReferenceAtTarget(refName string, targetID
 	}
 
 	slog.Debug("Identifying absolute reference path...")
-	absRefName, err := gitinterface.AbsoluteReference(r.r, refName)
+	absRefName, err := r.r.AbsoluteReference(refName)
+	if err != nil {
+		return err
+	}
+
+	targetIDHash, err := gitinterface.NewHash(targetID)
 	if err != nil {
 		return err
 	}
@@ -72,15 +75,19 @@ func (r *Repository) RecordRSLEntryForReferenceAtTarget(refName string, targetID
 	// signCommit must be verified for the refName in the delegation tree.
 
 	slog.Debug("Creating RSL reference entry...")
-	return rsl.NewReferenceEntry(absRefName, plumbing.NewHash(targetID)).CommitUsingSpecificKey(r.r, signingKeyBytes)
+	return rsl.NewReferenceEntry(absRefName, targetIDHash).CommitUsingSpecificKey(r.r, signingKeyBytes)
 }
 
 // RecordRSLAnnotation is the interface for the user to add an RSL annotation
 // for one or more prior RSL entries.
 func (r *Repository) RecordRSLAnnotation(rslEntryIDs []string, skip bool, message string, signCommit bool) error {
-	rslEntryHashes := []plumbing.Hash{}
+	rslEntryHashes := []gitinterface.Hash{}
 	for _, id := range rslEntryIDs {
-		rslEntryHashes = append(rslEntryHashes, plumbing.NewHash(id))
+		hash, err := gitinterface.NewHash(id)
+		if err != nil {
+			return err
+		}
+		rslEntryHashes = append(rslEntryHashes, hash)
 	}
 
 	// TODO: once policy verification is in place, the signing key used by
@@ -99,10 +106,10 @@ func (r *Repository) RecordRSLAnnotation(rslEntryIDs []string, skip bool, messag
 // diverged and need to be reconciled.
 func (r *Repository) CheckRemoteRSLForUpdates(ctx context.Context, remoteName string) (bool, bool, error) {
 	trackerRef := rsl.RemoteTrackerRef(remoteName)
-	rslRemoteRefSpec := []config.RefSpec{config.RefSpec(fmt.Sprintf("%s:%s", rsl.Ref, trackerRef))}
+	rslRemoteRefSpec := []string{fmt.Sprintf("%s:%s", rsl.Ref, trackerRef)}
 
 	slog.Debug("Updating remote RSL tracker...")
-	if err := gitinterface.FetchRefSpec(ctx, r.r, remoteName, rslRemoteRefSpec); err != nil {
+	if err := r.r.FetchRefSpec(remoteName, rslRemoteRefSpec); err != nil {
 		if errors.Is(err, transport.ErrEmptyRemoteRepository) {
 			// Check if remote is empty and exit appropriately
 			return false, false, nil
@@ -110,18 +117,18 @@ func (r *Repository) CheckRemoteRSLForUpdates(ctx context.Context, remoteName st
 		return false, false, err
 	}
 
-	remoteRefState, err := r.r.Reference(plumbing.ReferenceName(trackerRef), true)
+	remoteRefState, err := r.r.GetReference(trackerRef)
 	if err != nil {
 		return false, false, err
 	}
 
-	localRefState, err := r.r.Reference(plumbing.ReferenceName(rsl.Ref), true)
+	localRefState, err := r.r.GetReference(rsl.Ref)
 	if err != nil {
 		return false, false, err
 	}
 
 	// Check if local is nil and exit appropriately
-	if localRefState.Hash().IsZero() {
+	if localRefState.IsZero() {
 		// Local RSL has not been populated but remote is not zero
 		// So there are updates the local can pull
 		slog.Debug("Local RSL has not been initialized but remote RSL exists")
@@ -129,22 +136,13 @@ func (r *Repository) CheckRemoteRSLForUpdates(ctx context.Context, remoteName st
 	}
 
 	// Check if equal and exit early if true
-	if remoteRefState.Hash() == localRefState.Hash() {
+	if remoteRefState == localRefState {
 		slog.Debug("Local and remote RSLs have same state")
 		return false, false, nil
 	}
 
 	// Next, check if remote is ahead of local
-	remoteCommit, err := gitinterface.GetCommit(r.r, remoteRefState.Hash())
-	if err != nil {
-		return false, false, err
-	}
-	localCommit, err := gitinterface.GetCommit(r.r, localRefState.Hash())
-	if err != nil {
-		return false, false, err
-	}
-
-	knows, err := gitinterface.KnowsCommit(r.r, remoteCommit.Hash, localCommit)
+	knows, err := r.r.KnowsCommit(remoteRefState, localRefState)
 	if err != nil {
 		return false, false, err
 	}
@@ -156,7 +154,7 @@ func (r *Repository) CheckRemoteRSLForUpdates(ctx context.Context, remoteName st
 	// If not ancestor, local may be ahead or they may have diverged
 	// If remote is ancestor, only local is ahead, no updates
 	// If remote is not ancestor, the two have diverged, local needs to pull updates
-	knows, err = gitinterface.KnowsCommit(r.r, localCommit.Hash, remoteCommit)
+	knows, err = r.r.KnowsCommit(localRefState, remoteRefState)
 	if err != nil {
 		return false, false, err
 	}
@@ -171,9 +169,9 @@ func (r *Repository) CheckRemoteRSLForUpdates(ctx context.Context, remoteName st
 
 // PushRSL pushes the local RSL to the specified remote. As this push defaults
 // to fast-forward only, divergent RSL states are detected.
-func (r *Repository) PushRSL(ctx context.Context, remoteName string) error {
+func (r *Repository) PushRSL(remoteName string) error {
 	slog.Debug(fmt.Sprintf("Pushing RSL reference to '%s'...", remoteName))
-	if err := gitinterface.Push(ctx, r.r, remoteName, []string{rsl.Ref}); err != nil {
+	if err := r.r.Push(remoteName, []string{rsl.Ref}); err != nil {
 		return errors.Join(ErrPushingRSL, err)
 	}
 
@@ -182,9 +180,9 @@ func (r *Repository) PushRSL(ctx context.Context, remoteName string) error {
 
 // PullRSL pulls RSL contents from the specified remote to the local RSL. The
 // fetch is marked as fast forward only to detect RSL divergence.
-func (r *Repository) PullRSL(ctx context.Context, remoteName string) error {
+func (r *Repository) PullRSL(remoteName string) error {
 	slog.Debug(fmt.Sprintf("Pulling RSL reference from '%s'...", remoteName))
-	if err := gitinterface.Fetch(ctx, r.r, remoteName, []string{rsl.Ref}, true); err != nil {
+	if err := r.r.Fetch(remoteName, []string{rsl.Ref}, true); err != nil {
 		return errors.Join(ErrPullingRSL, err)
 	}
 
@@ -194,7 +192,7 @@ func (r *Repository) PullRSL(ctx context.Context, remoteName string) error {
 // isDuplicateEntry checks if the latest unskipped entry for the ref has the
 // same target ID Note that it's legal for the RSL to have target A, then B,
 // then A again, this is not considered a duplicate entry
-func (r *Repository) isDuplicateEntry(refName string, targetID plumbing.Hash) (bool, error) {
+func (r *Repository) isDuplicateEntry(refName string, targetID gitinterface.Hash) (bool, error) {
 	latestUnskippedEntry, _, err := rsl.GetLatestUnskippedReferenceEntryForRef(r.r, refName)
 	if err != nil {
 		if errors.Is(err, rsl.ErrRSLEntryNotFound) {

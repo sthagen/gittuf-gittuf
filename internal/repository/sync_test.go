@@ -3,7 +3,6 @@
 package repository
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -12,8 +11,6 @@ import (
 	"github.com/gittuf/gittuf/internal/rsl"
 	"github.com/gittuf/gittuf/internal/signerverifier"
 	"github.com/gittuf/gittuf/internal/tuf"
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -35,40 +32,37 @@ func TestClone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	remoteR, err := git.PlainInit(remoteTmpDir, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	remoteR := gitinterface.CreateTestGitRepository(t, remoteTmpDir)
 	remoteRepo := &Repository{r: remoteR}
-	if err := remoteRepo.InitializeRoot(context.Background(), rootSigner, false); err != nil {
-		t.Fatal(err)
-	}
-	if err := remoteRepo.AddTopLevelTargetsKey(context.Background(), rootSigner, targetsPubKey, false); err != nil {
-		t.Fatal(err)
-	}
-	if err := remoteRepo.InitializeTargets(context.Background(), targetsSigner, policy.TargetsRoleName, false); err != nil {
-		t.Fatal(err)
-	}
-	if err := policy.Apply(context.Background(), remoteRepo.r, false); err != nil {
-		t.Fatal(err)
-	}
-	emptyTreeHash, err := gitinterface.WriteTree(remoteRepo.r, nil)
+	treeBuilder := gitinterface.NewReplacementTreeBuilder(remoteR)
+	emptyTreeHash, err := treeBuilder.WriteRootTreeFromBlobIDs(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	if err := remoteRepo.InitializeRoot(testCtx, rootSigner, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := remoteRepo.AddTopLevelTargetsKey(testCtx, rootSigner, targetsPubKey, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := remoteRepo.InitializeTargets(testCtx, targetsSigner, policy.TargetsRoleName, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := policy.Apply(testCtx, remoteRepo.r, false); err != nil {
+		t.Fatal(err)
+	}
+
 	refName := "refs/heads/main"
 	anotherRefName := "refs/heads/feature"
-	commitID, err := gitinterface.Commit(remoteRepo.r, emptyTreeHash, refName, "Initial commit", false)
+	commitID, err := remoteRepo.r.Commit(emptyTreeHash, refName, "Initial commit", false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := remoteRepo.RecordRSLEntryForReference(refName, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := remoteRepo.r.Storer.SetReference(plumbing.NewSymbolicReference(plumbing.HEAD, plumbing.ReferenceName(refName))); err != nil {
-		t.Fatal(err)
-	}
-	if err := remoteRepo.r.Storer.SetReference(plumbing.NewHashReference(plumbing.ReferenceName(anotherRefName), commitID)); err != nil {
+	if err := remoteRepo.r.SetReference(anotherRefName, commitID); err != nil {
 		t.Fatal(err)
 	}
 	if err := remoteRepo.RecordRSLEntryForReference(anotherRefName, false); err != nil {
@@ -80,11 +74,11 @@ func TestClone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	remoteRSLRef, err := remoteRepo.r.Reference(plumbing.ReferenceName(rsl.Ref), true)
+	remoteRSLRefTip, err := remoteRepo.r.GetReference(rsl.Ref)
 	if err != nil {
 		t.Fatal(err)
 	}
-	remotePolicyRef, err := remoteRepo.r.Reference(plumbing.ReferenceName(policy.PolicyRef), true)
+	remotePolicyRefTip, err := remoteRepo.r.GetReference(policy.PolicyRef)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,24 +91,28 @@ func TestClone(t *testing.T) {
 		}
 		defer os.Chdir(currentDir) //nolint:errcheck
 
-		repo, err := Clone(context.Background(), remoteTmpDir, "", "")
+		repo, err := Clone(testCtx, remoteTmpDir, "", "")
 		assert.Nil(t, err)
-		head, err := repo.r.Head()
+		head, err := repo.r.GetSymbolicReferenceTarget("HEAD")
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, commitID, head.Hash())
+		headID, err := repo.r.GetReference(head)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, commitID, headID)
 
-		localRSLRef, err := repo.r.Reference(plumbing.ReferenceName(rsl.Ref), true)
+		localRSLRefTip, err := repo.r.GetReference(rsl.Ref)
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, remoteRSLRef.Hash(), localRSLRef.Hash())
-		localPolicyRef, err := repo.r.Reference(plumbing.ReferenceName(policy.PolicyRef), true)
+		assert.Equal(t, remoteRSLRefTip, localRSLRefTip)
+		localPolicyRefTip, err := repo.r.GetReference(policy.PolicyRef)
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, remotePolicyRef.Hash(), localPolicyRef.Hash())
+		assert.Equal(t, remotePolicyRefTip, localPolicyRefTip)
 	})
 
 	t.Run("successful clone with dir", func(t *testing.T) {
@@ -126,28 +124,32 @@ func TestClone(t *testing.T) {
 		defer os.Chdir(currentDir) //nolint:errcheck
 
 		dirName := "myRepo"
-		repo, err := Clone(context.Background(), remoteTmpDir, dirName, "")
+		repo, err := Clone(testCtx, remoteTmpDir, dirName, "")
 		assert.Nil(t, err)
-		head, err := repo.r.Head()
+		head, err := repo.r.GetSymbolicReferenceTarget("HEAD")
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, commitID, head.Hash())
+		headID, err := repo.r.GetReference(head)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, commitID, headID)
 
 		dirInfo, err := os.Stat(dirName)
 		assert.Nil(t, err)
 		assert.True(t, dirInfo.IsDir())
 
-		localRSLRef, err := repo.r.Reference(plumbing.ReferenceName(rsl.Ref), true)
+		localRSLRefTip, err := repo.r.GetReference(rsl.Ref)
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, remoteRSLRef.Hash(), localRSLRef.Hash())
-		localPolicyRef, err := repo.r.Reference(plumbing.ReferenceName(policy.PolicyRef), true)
+		assert.Equal(t, remoteRSLRefTip, localRSLRefTip)
+		localPolicyRefTip, err := repo.r.GetReference(policy.PolicyRef)
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, remotePolicyRef.Hash(), localPolicyRef.Hash())
+		assert.Equal(t, remotePolicyRefTip, localPolicyRefTip)
 	})
 
 	t.Run("successful clone without specifying dir, with non-HEAD initial branch", func(t *testing.T) {
@@ -158,25 +160,29 @@ func TestClone(t *testing.T) {
 		}
 		defer os.Chdir(currentDir) //nolint:errcheck
 
-		repo, err := Clone(context.Background(), remoteTmpDir, "", anotherRefName)
+		repo, err := Clone(testCtx, remoteTmpDir, "", anotherRefName)
 		assert.Nil(t, err)
-		head, err := repo.r.Head()
+		head, err := repo.r.GetSymbolicReferenceTarget("HEAD")
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, commitID, head.Hash())
-		assert.Equal(t, plumbing.ReferenceName(anotherRefName), head.Name())
+		headID, err := repo.r.GetReference(head)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, commitID, headID)
+		assert.Equal(t, anotherRefName, head)
 
-		localRSLRef, err := repo.r.Reference(plumbing.ReferenceName(rsl.Ref), true)
+		localRSLRefTip, err := repo.r.GetReference(rsl.Ref)
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, remoteRSLRef.Hash(), localRSLRef.Hash())
-		localPolicyRef, err := repo.r.Reference(plumbing.ReferenceName(policy.PolicyRef), true)
+		assert.Equal(t, remoteRSLRefTip, localRSLRefTip)
+		localPolicyRefTip, err := repo.r.GetReference(policy.PolicyRef)
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, remotePolicyRef.Hash(), localPolicyRef.Hash())
+		assert.Equal(t, remotePolicyRefTip, localPolicyRefTip)
 	})
 
 	t.Run("unsuccessful clone when unspecified dir already exists", func(t *testing.T) {
@@ -187,10 +193,10 @@ func TestClone(t *testing.T) {
 		}
 		defer os.Chdir(currentDir) //nolint:errcheck
 
-		_, err = Clone(context.Background(), remoteTmpDir, "", "")
+		_, err = Clone(testCtx, remoteTmpDir, "", "")
 		assert.Nil(t, err)
 
-		_, err = Clone(context.Background(), remoteTmpDir, "", "")
+		_, err = Clone(testCtx, remoteTmpDir, "", "")
 		assert.ErrorIs(t, err, ErrDirExists)
 	})
 
@@ -206,7 +212,7 @@ func TestClone(t *testing.T) {
 		if err := os.Mkdir(dirName, 0755); err != nil {
 			t.Fatal(err)
 		}
-		_, err = Clone(context.Background(), remoteTmpDir, dirName, "")
+		_, err = Clone(testCtx, remoteTmpDir, dirName, "")
 		assert.ErrorIs(t, err, ErrDirExists)
 	})
 
@@ -218,23 +224,27 @@ func TestClone(t *testing.T) {
 		}
 		defer os.Chdir(currentDir) //nolint:errcheck
 
-		repo, err := Clone(context.Background(), remoteTmpDir+"//", "", "")
+		repo, err := Clone(testCtx, remoteTmpDir+"//", "", "")
 		assert.Nil(t, err)
-		head, err := repo.r.Head()
+		head, err := repo.r.GetSymbolicReferenceTarget("HEAD")
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, commitID, head.Hash())
+		headID, err := repo.r.GetReference(head)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assert.Equal(t, commitID, headID)
 
-		localRSLRef, err := repo.r.Reference(plumbing.ReferenceName(rsl.Ref), true)
+		localRSLRefTip, err := repo.r.GetReference(rsl.Ref)
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, remoteRSLRef.Hash(), localRSLRef.Hash())
-		localPolicyRef, err := repo.r.Reference(plumbing.ReferenceName(policy.PolicyRef), true)
+		assert.Equal(t, remoteRSLRefTip, localRSLRefTip)
+		localPolicyRefTip, err := repo.r.GetReference(policy.PolicyRef)
 		if err != nil {
 			t.Fatal(err)
 		}
-		assert.Equal(t, remotePolicyRef.Hash(), localPolicyRef.Hash())
+		assert.Equal(t, remotePolicyRefTip, localPolicyRefTip)
 	})
 }
