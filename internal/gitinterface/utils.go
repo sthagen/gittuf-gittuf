@@ -130,11 +130,7 @@ func (r *Repository) AbsoluteReference(target string) (string, error) {
 	}
 
 	if target == "HEAD" {
-		stdOut, stdErr, err := r.executeGitCommand("symbolic-ref", "HEAD")
-		if err != nil {
-			return "", fmt.Errorf("unable to resolve HEAD: %s", stdErr)
-		}
-		return strings.TrimSpace(stdOut), nil
+		return r.GetSymbolicReferenceTarget("HEAD")
 	}
 
 	// Check if branch

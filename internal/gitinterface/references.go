@@ -46,3 +46,12 @@ func (r *Repository) GetReference(refName string) (Hash, error) {
 
 	return hash, nil
 }
+
+func (r *Repository) GetSymbolicReferenceTarget(refName string) (string, error) {
+	stdOut, stdErr, err := r.executeGitCommand("symbolic-ref", refName)
+	if err != nil {
+		return "", fmt.Errorf("unable to resolve %s: %s", refName, stdErr)
+	}
+
+	return strings.TrimSpace(stdOut), nil
+}
