@@ -33,20 +33,18 @@ func (r *Repository) GetGitDir() string {
 }
 
 func LoadRepository() (*Repository, error) {
+	repo := &Repository{clock: clockwork.NewRealClock()}
 	envVar := os.Getenv("GIT_DIR")
 	if envVar != "" {
-		return &Repository{gitDirPath: envVar}, nil
+		repo.gitDirPath = envVar
+		return repo, nil
 	}
-
-	repo := &Repository{}
 
 	stdOut, stdErr, err := repo.executeGitCommandDirect("rev-parse", "--git-dir")
 	if err != nil {
 		return nil, fmt.Errorf("unable to identify GIT_DIR: %w: %s", err, stdErr)
 	}
 	repo.gitDirPath = strings.TrimSpace(stdOut)
-
-	repo.clock = clockwork.NewRealClock()
 
 	return repo, nil
 }
