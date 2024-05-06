@@ -64,7 +64,7 @@ func Push(ctx context.Context, repo *git.Repository, remoteName string, refs []s
 	return PushRefSpec(ctx, repo, remoteName, refSpecs)
 }
 
-func (r *Repository) PushRefSpec(ctx context.Context, remoteName string, refSpecs []string) error {
+func (r *Repository) PushRefSpec(remoteName string, refSpecs []string) error {
 	args := []string{"push", remoteName}
 	args = append(args, refSpecs...)
 
@@ -76,7 +76,7 @@ func (r *Repository) PushRefSpec(ctx context.Context, remoteName string, refSpec
 	return nil
 }
 
-func (r *Repository) Push(ctx context.Context, remoteName string, refs []string) error {
+func (r *Repository) Push(remoteName string, refs []string) error {
 	refSpecs := make([]string, 0, len(refs))
 	for _, ref := range refs {
 		refSpec, err := r.RefSpec(ref, "", true)
@@ -86,7 +86,7 @@ func (r *Repository) Push(ctx context.Context, remoteName string, refs []string)
 		refSpecs = append(refSpecs, refSpec)
 	}
 
-	return r.PushRefSpec(ctx, remoteName, refSpecs)
+	return r.PushRefSpec(remoteName, refSpecs)
 }
 
 // FetchRefSpec fetches to the repo from the specified remote using
@@ -138,7 +138,7 @@ func Fetch(ctx context.Context, repo *git.Repository, remoteName string, refs []
 	return FetchRefSpec(ctx, repo, remoteName, refSpecs)
 }
 
-func (r *Repository) FetchRefSpec(ctx context.Context, remoteName string, refSpecs []string) error {
+func (r *Repository) FetchRefSpec(remoteName string, refSpecs []string) error {
 	args := []string{"fetch", remoteName}
 	args = append(args, refSpecs...)
 
@@ -150,7 +150,7 @@ func (r *Repository) FetchRefSpec(ctx context.Context, remoteName string, refSpe
 	return nil
 }
 
-func (r *Repository) Fetch(ctx context.Context, remoteName string, refs []string, fastForwardOnly bool) error {
+func (r *Repository) Fetch(remoteName string, refs []string, fastForwardOnly bool) error {
 	refSpecs := make([]string, 0, len(refs))
 	for _, ref := range refs {
 		refSpec, err := r.RefSpec(ref, "", fastForwardOnly)
@@ -160,10 +160,10 @@ func (r *Repository) Fetch(ctx context.Context, remoteName string, refs []string
 		refSpecs = append(refSpecs, refSpec)
 	}
 
-	return r.FetchRefSpec(ctx, remoteName, refSpecs)
+	return r.FetchRefSpec(remoteName, refSpecs)
 }
 
-func CloneAndFetchRepository(ctx context.Context, remoteURL, dir, initialBranch string, refs []string) (*Repository, error) {
+func CloneAndFetchRepository(remoteURL, dir, initialBranch string, refs []string) (*Repository, error) {
 	if dir == "" {
 		return nil, fmt.Errorf("target directory must be specified")
 	}
@@ -184,7 +184,7 @@ func CloneAndFetchRepository(ctx context.Context, remoteURL, dir, initialBranch 
 
 	repo.gitDirPath = path.Join(dir, ".git")
 
-	return repo, repo.Fetch(ctx, DefaultRemoteName, refs, true)
+	return repo, repo.Fetch(DefaultRemoteName, refs, true)
 }
 
 // CloneAndFetch clones a repository using the specified URL and additionally
