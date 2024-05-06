@@ -77,7 +77,7 @@ func (r *Repository) GetGitConfig() (map[string]string, error) {
 		if len(split) < 2 {
 			continue
 		}
-		config[split[0]] = strings.Join(split[1:], " ")
+		config[strings.ToLower(split[0])] = strings.Join(split[1:], " ")
 	}
 
 	return config, nil

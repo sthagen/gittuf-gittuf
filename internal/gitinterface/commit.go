@@ -148,6 +148,68 @@ func CommitUsingSpecificKey(repo *git.Repository, treeHash plumbing.Hash, target
 	return ApplyCommit(repo, commit, curRef)
 }
 
+func (r *Repository) CommitUsingSpecificKey(treeID Hash, targetRef, message string, signingKeyPEMBytes []byte) (Hash, error) {
+	gitConfig, err := r.GetGitConfig()
+	if err != nil {
+		return ZeroHash, err
+	}
+
+	commitMetadata := object.Signature{
+		Name:  gitConfig["user.name"],
+		Email: gitConfig["user.email"],
+		When:  r.clock.Now(),
+	}
+
+	commit := &object.Commit{
+		Author:    commitMetadata,
+		Committer: commitMetadata,
+		TreeHash:  plumbing.NewHash(treeID.String()),
+		Message:   message,
+	}
+
+	refTip, err := r.GetReference(targetRef)
+	if err != nil {
+		if !errors.Is(err, ErrReferenceNotFound) {
+			return ZeroHash, err
+		}
+	}
+
+	if !refTip.IsZero() {
+		commit.ParentHashes = []plumbing.Hash{plumbing.NewHash(refTip.String())}
+	}
+
+	commitContents, err := getCommitBytesWithoutSignature(commit)
+	if err != nil {
+		return ZeroHash, err
+	}
+	signature, err := signGitObjectUsingKey(commitContents, signingKeyPEMBytes)
+	if err != nil {
+		return ZeroHash, err
+	}
+	commit.PGPSignature = signature
+
+	goGitRepo, err := r.GetGoGitRepository()
+	if err != nil {
+		return ZeroHash, err
+	}
+
+	obj := goGitRepo.Storer.NewEncodedObject()
+	if err := commit.Encode(obj); err != nil {
+		return ZeroHash, err
+	}
+	commitID, err := goGitRepo.Storer.SetEncodedObject(obj)
+	if err != nil {
+		return ZeroHash, err
+	}
+
+	commitIDHash, err := NewHash(commitID.String())
+	if err != nil {
+		return ZeroHash, err
+	}
+
+	return commitIDHash, r.CheckAndSetReference(targetRef, commitIDHash, refTip)
+}
+
 // ApplyCommit writes a commit object in the repository and updates the
 // specified reference to point to the commit.
 func ApplyCommit(repo *git.Repository, commit *object.Commit, curRef *plumbing.Reference) (plumbing.Hash, error) {

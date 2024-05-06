@@ -66,6 +66,65 @@ func Tag(repo *git.Repository, target plumbing.Hash, name, message string, sign 
 	return ApplyTag(repo, tag)
 }
 
+func (r *Repository) TagUsingSpecificKey(target Hash, name, message string, signingKeyPEMBytes []byte) (Hash, error) {
+	gitConfig, err := r.GetGitConfig()
+	if err != nil {
+		return ZeroHash, err
+	}
+
+	goGitRepo, err := r.GetGoGitRepository()
+	if err != nil {
+		return ZeroHash, err
+	}
+
+	targetObj, err := goGitRepo.Object(plumbing.AnyObject, plumbing.NewHash(target.String()))
+	if err != nil {
+		return ZeroHash, err
+	}
+
+	if !strings.HasSuffix(message, "\n") {
+		message += "\n"
+	}
+
+	tag := &object.Tag{
+		Name: name,
+		Tagger: object.Signature{
+			Name:  gitConfig["user.name"],
+			Email: gitConfig["user.email"],
+			When:  r.clock.Now(),
+		},
+		Message:    message,
+		TargetType: targetObj.Type(),
+		Target:     targetObj.ID(),
+	}
+
+	tagContents, err := getTagBytesWithoutSignature(tag)
+	if err != nil {
+		return ZeroHash, err
+	}
+	signature, err := signGitObjectUsingKey(tagContents, signingKeyPEMBytes)
+	if err != nil {
+		return ZeroHash, err
+	}
+	tag.PGPSignature = signature
+
+	obj := goGitRepo.Storer.NewEncodedObject()
+	if err := tag.Encode(obj); err != nil {
+		return ZeroHash, err
+	}
+	tagID, err := goGitRepo.Storer.SetEncodedObject(obj)
+	if err != nil {
+		return ZeroHash, err
+	}
+
+	tagIDHash, err := NewHash(tagID.String())
+	if err != nil {
+		return ZeroHash, err
+	}
+
+	return tagIDHash, r.SetReference(fmt.Sprintf("%s%s", TagRefPrefix, name), tagIDHash)
+}
+
 // ApplyTag sets the tag reference after the tag object is written to the
 // repository's object store.
 func ApplyTag(repo *git.Repository, tag *object.Tag) (plumbing.Hash, error) {
