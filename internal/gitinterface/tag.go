@@ -122,7 +122,7 @@ func (r *Repository) TagUsingSpecificKey(target Hash, name, message string, sign
 		return ZeroHash, err
 	}
 
-	return tagIDHash, r.SetReference(fmt.Sprintf("%s%s", TagRefPrefix, name), tagIDHash)
+	return tagIDHash, r.SetReference(TagReferenceName(name), tagIDHash)
 }
 
 // ApplyTag sets the tag reference after the tag object is written to the

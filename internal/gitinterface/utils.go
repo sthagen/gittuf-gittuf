@@ -134,7 +134,7 @@ func (r *Repository) AbsoluteReference(target string) (string, error) {
 	}
 
 	// Check if branch
-	branchName := fmt.Sprintf("%s%s", BranchRefPrefix, target)
+	branchName := BranchReferenceName(target)
 	_, err := r.GetReference(branchName)
 	if err == nil {
 		return branchName, nil
@@ -144,7 +144,7 @@ func (r *Repository) AbsoluteReference(target string) (string, error) {
 	}
 
 	// Check if tag
-	tagName := fmt.Sprintf("%s%s", TagRefPrefix, target)
+	tagName := TagReferenceName(target)
 	_, err = r.GetReference(tagName)
 	if err == nil {
 		return tagName, nil
@@ -231,6 +231,22 @@ func (r *Repository) RefSpec(refName, remoteName string, fastForwardOnly bool) (
 	}
 
 	return refSpecString, nil
+}
+
+func BranchReferenceName(branchName string) string {
+	if strings.HasPrefix(branchName, BranchRefPrefix) {
+		return branchName
+	}
+
+	return fmt.Sprintf("%s%s", BranchRefPrefix, branchName)
+}
+
+func TagReferenceName(tagName string) string {
+	if strings.HasPrefix(tagName, TagRefPrefix) {
+		return tagName
+	}
+
+	return fmt.Sprintf("%s%s", TagRefPrefix, tagName)
 }
 
 func RemoteRef(refName, remoteName string) string {
