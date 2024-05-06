@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/go-git/go-billy/v5/memfs"
 	"github.com/go-git/go-git/v5"
@@ -170,6 +171,7 @@ func CloneAndFetchRepository(ctx context.Context, remoteURL, dir, initialBranch 
 
 	args := []string{"clone", remoteURL}
 	if initialBranch != "" {
+		initialBranch = strings.TrimPrefix(initialBranch, BranchRefPrefix)
 		args = append(args, "--branch", initialBranch)
 	}
 	args = append(args, dir)
