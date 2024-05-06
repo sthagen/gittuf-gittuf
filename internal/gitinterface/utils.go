@@ -134,7 +134,7 @@ func (r *Repository) AbsoluteReference(target string) (string, error) {
 	}
 
 	// Check if branch
-	branchName := fmt.Sprintf("%s/%s", BranchRefPrefix, target)
+	branchName := fmt.Sprintf("%s%s", BranchRefPrefix, target)
 	_, err := r.GetReference(branchName)
 	if err == nil {
 		return branchName, nil
@@ -144,7 +144,7 @@ func (r *Repository) AbsoluteReference(target string) (string, error) {
 	}
 
 	// Check if tag
-	tagName := fmt.Sprintf("%s/%s", TagRefPrefix, target)
+	tagName := fmt.Sprintf("%s%s", TagRefPrefix, target)
 	_, err = r.GetReference(tagName)
 	if err == nil {
 		return tagName, nil
