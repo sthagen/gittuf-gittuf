@@ -143,6 +143,53 @@ func VerifyTagSignature(ctx context.Context, tag *object.Tag, key *tuf.Key) erro
 	return ErrUnknownSigningMethod
 }
 
+func (r *Repository) verifyTagSignature(ctx context.Context, tagID Hash, key *tuf.Key) error {
+	goGitRepo, err := r.GetGoGitRepository()
+	if err != nil {
+		return fmt.Errorf("error opening repository: %w", err)
+	}
+
+	tag, err := goGitRepo.TagObject(plumbing.NewHash(tagID.String()))
+	if err != nil {
+		return fmt.Errorf("unable to load commit object: %w", err)
+	}
+
+	switch key.KeyType {
+	case signerverifier.GPGKeyType:
+		if _, err := tag.Verify(key.KeyVal.Public); err != nil {
+			return ErrIncorrectVerificationKey
+		}
+
+		return nil
+	case signerverifier.RSAKeyType, signerverifier.ECDSAKeyType, signerverifier.ED25519KeyType:
+		tagContents, err := getTagBytesWithoutSignature(tag)
+		if err != nil {
+			return errors.Join(ErrVerifyingSSHSignature, err)
+		}
+		tagSignature := []byte(tag.PGPSignature)
+
+		if err := verifySSHKeySignature(key, tagContents, tagSignature); err != nil {
+			return errors.Join(ErrIncorrectVerificationKey, err)
+		}
+
+		return nil
+	case signerverifier.FulcioKeyType:
+		tagContents, err := getTagBytesWithoutSignature(tag)
+		if err != nil {
+			return errors.Join(ErrVerifyingSigstoreSignature, err)
+		}
+		tagSignature := []byte(tag.PGPSignature)
+
+		if err := verifyGitsignSignature(ctx, key, tagContents, tagSignature); err != nil {
+			return errors.Join(ErrIncorrectVerificationKey, err)
+		}
+
+		return nil
+	}
+
+	return ErrUnknownSigningMethod
+}
+
 // GetTag returns the requested tag object.
 func GetTag(repo *git.Repository, tagID plumbing.Hash) (*object.Tag, error) {
 	return repo.TagObject(tagID)

@@ -270,7 +270,7 @@ func TestRepositoryVerifyCommit(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = repo.VerifyCommitSignature(context.Background(), commitID, key)
+	err = repo.verifyCommitSignature(context.Background(), commitID, key)
 	assert.Nil(t, err)
 }
 
