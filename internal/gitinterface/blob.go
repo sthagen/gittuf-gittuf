@@ -4,7 +4,9 @@ package gitinterface
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"strings"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -29,6 +31,23 @@ func ReadBlob(repo *git.Repository, blobID plumbing.Hash) ([]byte, error) {
 	return io.ReadAll(reader)
 }
 
+// ReadBlob returns the contents of a the blob referenced by blobID.
+func (r *Repository) ReadBlob(blobID Hash) ([]byte, error) {
+	stdOut, stdErr, err := r.executeGitCommand("cat-file", "-t", blobID.String())
+	if err != nil {
+		return nil, fmt.Errorf("unable to inspect if object is blob: %s", stdErr)
+	} else if strings.TrimSpace(stdOut) != "blob" {
+		return nil, fmt.Errorf("requested Git ID '%s' is not a blob object", blobID.String())
+	}
+
+	stdOut, stdErr, err = r.executeGitCommand("cat-file", "-p", blobID.String())
+	if err != nil {
+		return nil, fmt.Errorf("unable to read blob: %s", stdErr)
+	}
+
+	return []byte(stdOut), nil
+}
+
 // WriteBlob creates a blob object with the specified contents and returns the
 // ID of the resultant blob.
 func WriteBlob(repo *git.Repository, contents []byte) (plumbing.Hash, error) {
@@ -50,6 +69,22 @@ func WriteBlob(repo *git.Repository, contents []byte) (plumbing.Hash, error) {
 	}
 
 	return repo.Storer.SetEncodedObject(obj)
+}
+
+// WriteBlob creates a blob object with the specified contents and returns the
+// ID of the resultant blob.
+func (r *Repository) WriteBlob(contents []byte) (Hash, error) {
+	stdOut, stdErr, err := r.executeGitCommandWithStdIn(contents, "hash-object", "-t", "blob", "-w", "--stdin")
+	if err != nil {
+		return ZeroHash, fmt.Errorf("unable to write blob: %s", stdErr)
+	}
+
+	hash, err := NewHash(strings.TrimSpace(stdOut))
+	if err != nil {
+		return ZeroHash, fmt.Errorf("invalid Git ID for blob: %w", err)
+	}
+
+	return hash, nil
 }
 
 // GetBlob returns the requested blob object.
