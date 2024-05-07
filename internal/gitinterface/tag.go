@@ -125,6 +125,20 @@ func (r *Repository) TagUsingSpecificKey(target Hash, name, message string, sign
 	return tagIDHash, r.SetReference(TagReferenceName(name), tagIDHash)
 }
 
+func (r *Repository) GetTagTarget(tagID Hash) (Hash, error) {
+	stdOut, stdErr, err := r.executeGitCommand("rev-list", "-n", "1", tagID.String())
+	if err != nil {
+		return ZeroHash, fmt.Errorf("unable to resolve tag's target ID: %s", stdErr)
+	}
+
+	hash, err := NewHash(strings.TrimSpace(stdOut))
+	if err != nil {
+		return ZeroHash, fmt.Errorf("invalid format for target ID: %w", err)
+	}
+
+	return hash, nil
+}
+
 // ApplyTag sets the tag reference after the tag object is written to the
 // repository's object store.
 func ApplyTag(repo *git.Repository, tag *object.Tag) (plumbing.Hash, error) {
