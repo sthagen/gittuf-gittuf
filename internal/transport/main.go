@@ -25,7 +25,7 @@ import (
 
 var logFile io.Writer
 
-func run() (reterr error) {
+func run() error {
 	if len(os.Args) < 3 {
 		return fmt.Errorf("usage: %s <remote-name> <url>", os.Args[0])
 	}
