@@ -67,20 +67,19 @@ func run() error {
 			// we need to solve the "actual" transport to make sense of this
 			// also, all of this is naturally only for a "smart" protocol?
 
-			refs, err := gitListRefs(path.Join(url, ".git"))
+			refs, err := gitListRefs(url)
 			if err != nil {
 				return fmt.Errorf("error listing remote refs: %w", err)
-			}
-
-			head, err := gitSymbolicRef("HEAD", path.Join(url, ".git"))
-			if err != nil {
-				return fmt.Errorf("error resolving HEAD: %w", err)
 			}
 
 			for ref := range refs {
 				logAndWrite(fmt.Sprintf("? %s\n", ref))
 			}
-			logAndWrite(fmt.Sprintf("@%s HEAD\n", head))
+
+			head, err := gitSymbolicRef("HEAD", url)
+			if err == nil {
+				logAndWrite(fmt.Sprintf("@%s HEAD\n", head))
+			}
 
 			fmt.Fprintf(os.Stdout, "\n")
 
@@ -140,7 +139,7 @@ func run() error {
 
 			// don't we need to be able to list / for-each-ref on the remote to
 			// learn what to set locals to?
-			targetRefs, err := gitListRefs(path.Join(url, ".git"))
+			targetRefs, err := gitListRefs(url)
 			if err != nil {
 				return fmt.Errorf("unable to list remote refs: %w", err)
 			}
@@ -221,10 +220,15 @@ func run() error {
 	}
 }
 
-func gitListRefs(gitDir string) (map[string]string, error) {
-	output, err := exec.Command("git", "--git-dir", gitDir, "for-each-ref", "--format=%(objectname) %(refname)", "refs/heads/").Output()
+func gitListRefs(repoLocation string) (map[string]string, error) {
+	_, err := os.Stat(path.Join(repoLocation, ".git"))
+	if err == nil {
+		repoLocation = path.Join(repoLocation, ".git")
+	}
+	cmd := exec.Command("git", "--git-dir", repoLocation, "for-each-ref", "--format=%(objectname) %(refname)", "refs/heads/")
+	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("unable to list refs: %w", err)
+		return nil, fmt.Errorf("unable to list refs: %s", string(err.(*exec.ExitError).Stderr))
 	}
 
 	lines := bytes.Split(output, []byte{'\n'})
@@ -243,8 +247,13 @@ func gitListRefs(gitDir string) (map[string]string, error) {
 	return refs, nil
 }
 
-func gitSymbolicRef(name, gitDir string) (string, error) {
-	output, err := exec.Command("git", "--git-dir", gitDir, "symbolic-ref", name).Output()
+func gitSymbolicRef(name, repoLocation string) (string, error) {
+	_, err := os.Stat(path.Join(repoLocation, ".git"))
+	if err == nil {
+		repoLocation = path.Join(repoLocation, ".git")
+	}
+	cmd := exec.Command("git", "--git-dir", repoLocation, "symbolic-ref", name)
+	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("unable to resolve symbolic ref: %s", string(err.(*exec.ExitError).Stderr))
 	}
