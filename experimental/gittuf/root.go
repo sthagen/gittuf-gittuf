@@ -6,9 +6,7 @@ package gittuf
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -1388,14 +1386,12 @@ func (r *Repository) loadRootMetadata(state *policy.State, keyID string) (tuf.Ro
 }
 
 func (r *Repository) updateRootMetadata(ctx context.Context, state *policy.State, signer sslibdsse.SignerVerifier, rootMetadata tuf.RootMetadata, commitMessage string, createRSLEntry, signCommit bool) error {
-	rootMetadataBytes, err := json.Marshal(rootMetadata)
+	rootMetadata.IncrementVersion()
+
+	env, err := dsse.CreateEnvelope(rootMetadata)
 	if err != nil {
 		return err
 	}
-
-	env := state.Metadata.RootEnvelope
-	env.Signatures = []sslibdsse.Signature{}
-	env.Payload = base64.StdEncoding.EncodeToString(rootMetadataBytes)
 
 	slog.Debug("Signing updated root metadata...")
 	env, err = dsse.SignEnvelope(ctx, env, signer)

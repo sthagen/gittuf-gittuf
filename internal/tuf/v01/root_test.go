@@ -45,8 +45,8 @@ func TestRootMetadata(t *testing.T) {
 		assert.True(t, rootMetadata.Roles["targets"].KeyIDs.Has(key.KeyID))
 	})
 
-	t.Run("test SchemaVersion", func(t *testing.T) {
-		schemaVersion := rootMetadata.SchemaVersion()
+	t.Run("test GetSchemaVersion", func(t *testing.T) {
+		schemaVersion := rootMetadata.GetSchemaVersion()
 		assert.Equal(t, rootVersion, schemaVersion)
 	})
 

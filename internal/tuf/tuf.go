@@ -94,8 +94,13 @@ type RootMetadata interface {
 	// unenforced
 	SetExpires(expiry string)
 
-	// SchemaVersion returns the metadata schema version.
-	SchemaVersion() string
+	// GetSchemaVersion returns the metadata schema version.
+	GetSchemaVersion() string
+
+	// GetVersion returns the version number of the metadata.
+	GetVersion() uint64
+	// IncrementVersion increments the version number of the metadata by 1.
+	IncrementVersion()
 
 	// GetRepositoryLocation returns the canonical location of the Git
 	// repository.
@@ -234,8 +239,13 @@ type TargetsMetadata interface {
 	// unenforced
 	SetExpires(expiry string)
 
-	// SchemaVersion returns the metadata schema version.
-	SchemaVersion() string
+	// GetSchemaVersion returns the metadata schema version.
+	GetSchemaVersion() string
+
+	// GetVersion returns the version number of the metadata.
+	GetVersion() uint64
+	// IncrementVersion increments the version number of the metadata by 1.
+	IncrementVersion()
 
 	// GetPrincipals returns all the principals in the rule file.
 	GetPrincipals() map[string]Principal
