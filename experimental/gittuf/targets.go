@@ -462,6 +462,40 @@ func (r *Repository) SignTargets(ctx context.Context, signer sslibdsse.SignerVer
 	return state.Commit(r.r, commitMessage, options.CreateRSLEntry, signCommit)
 }
 
+func (r *Repository) IncrementTargetsVersion(ctx context.Context, signer sslibdsse.SignerVerifier, targetsRoleName string, signCommit bool, opts ...trustpolicyopts.Option) error {
+	if signCommit {
+		slog.Debug("Checking if Git signing is configured...")
+		err := r.r.CanSign()
+		if err != nil {
+			return err
+		}
+	}
+
+	options := &trustpolicyopts.Options{}
+	for _, fn := range opts {
+		fn(options)
+	}
+
+	slog.Debug("Loading current policy...")
+	state, err := policy.LoadCurrentState(ctx, r.r, policy.PolicyStagingRef, policyopts.BypassRSL())
+	if err != nil {
+		return err
+	}
+	if !state.HasTargetsRole(targetsRoleName) {
+		return policy.ErrMetadataNotFound
+	}
+
+	slog.Debug("Loading current rule file...")
+	targetsMetadata, err := state.GetTargetsMetadata(targetsRoleName, true)
+	if err != nil {
+		return err
+	}
+
+	// Just pass it to updateTargetsMetadata as it will increment the version
+	commitMessage := fmt.Sprintf("Increment rule file '%s' version", targetsRoleName)
+	return r.updateTargetsMetadata(ctx, state, signer, targetsRoleName, targetsMetadata, commitMessage, options.CreateRSLEntry, signCommit)
+}
+
 func (r *Repository) updateTargetsMetadata(ctx context.Context, state *policy.State, signer sslibdsse.SignerVerifier, targetsMetadataName string, targetsMetadata tuf.TargetsMetadata, commitMessage string, createRSLEntry, signCommit bool) error {
 	targetsMetadata.IncrementVersion()
 
