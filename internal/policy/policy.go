@@ -258,6 +258,10 @@ func LoadState(ctx context.Context, repo *gitinterface.Repository, requestedEntr
 			return nil, err
 		}
 
+		if err := state.Verify(ctx); err != nil {
+			return nil, fmt.Errorf("requested state has invalidly signed metadata: %w", err)
+		}
+
 		if len(options.InitialRootPrincipals) == 0 {
 			slog.Debug(fmt.Sprintf("Trusting root of trust for initial policy '%s'...", firstPolicyEntry.GetID().String()))
 			return state, nil

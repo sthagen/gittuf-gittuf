@@ -348,6 +348,71 @@ func createTestStateWithPolicyUnnumbered(t *testing.T) *State {
 	return state
 }
 
+func createTestStateWithPolicyTargetsSignedByWrongKey(t *testing.T) *State {
+	rootSigner := setupSSHKeysForSigning(t, rootKeyBytes, rootPubKeyBytes)
+	key := tufv01.NewKeyFromSSLibKey(rootSigner.MetadataKey())
+
+	rootMetadata, err := InitializeRootMetadata(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := rootMetadata.AddPrimaryRuleFilePrincipal(key); err != nil {
+		t.Fatal(err)
+	}
+
+	rootEnv, err := dsse.CreateEnvelope(rootMetadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootEnv, err = dsse.SignEnvelope(context.Background(), rootEnv, rootSigner)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gpgKeyR, err := gpg.LoadGPGKeyFromBytes(gpgPubKeyBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gpgKey := tufv01.NewKeyFromSSLibKey(gpgKeyR)
+
+	targetsSigner := setupSSHKeysForSigning(t, targets1KeyBytes, targets1PubKeyBytes)
+
+	targetsMetadata := InitializeTargetsMetadata()
+	if err := targetsMetadata.AddPrincipal(gpgKey); err != nil {
+		t.Fatal(err)
+	}
+	if err := targetsMetadata.AddRule("protect-main", []string{gpgKey.KeyID}, []string{"git:refs/heads/main"}, 1); err != nil {
+		t.Fatal(err)
+	}
+	// Add a file protection rule. When used with common.AddNTestCommitsToSpecifiedRef, we have files with names 1, 2, 3,...n.
+	if err := targetsMetadata.AddRule("protect-files-1-and-2", []string{gpgKey.KeyID}, []string{"file:1", "file:2"}, 1); err != nil {
+		t.Fatal(err)
+	}
+
+	targetsEnv, err := dsse.CreateEnvelope(targetsMetadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetsEnv, err = dsse.SignEnvelope(context.Background(), targetsEnv, targetsSigner)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	state := &State{
+		Metadata: &StateMetadata{
+			RootEnvelope:    rootEnv,
+			TargetsEnvelope: targetsEnv,
+		},
+	}
+
+	if err := state.preprocess(); err != nil {
+		t.Fatal(err)
+	}
+
+	return state
+}
+
 // createTestStateWithGlobalConstraintThreshold creates a policy state with no
 // explicit branch protection rules but with a two-approval constraint on
 // changes to the main branch. The two keys trusted are `rootPubKeyBytes` and
