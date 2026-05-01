@@ -22,6 +22,7 @@ const (
 type RootMetadata struct {
 	Type               string                     `json:"type"`
 	Expires            string                     `json:"expires"`
+	Version            uint64                     `json:"version"`
 	RepositoryLocation string                     `json:"repositoryLocation,omitempty"`
 	Keys               map[string]*Key            `json:"keys"`
 	Roles              map[string]Role            `json:"roles"`
@@ -35,7 +36,8 @@ type RootMetadata struct {
 // NewRootMetadata returns a new instance of RootMetadata.
 func NewRootMetadata() *RootMetadata {
 	return &RootMetadata{
-		Type: "root",
+		Type:    "root",
+		Version: 1,
 	}
 }
 
@@ -44,9 +46,19 @@ func (r *RootMetadata) SetExpires(expires string) {
 	r.Expires = expires
 }
 
-// SchemaVersion returns the metadata schema version.
-func (r *RootMetadata) SchemaVersion() string {
+// GetSchemaVersion returns the metadata schema version.
+func (r *RootMetadata) GetSchemaVersion() string {
 	return rootVersion
+}
+
+// GetVersion returns the version number of the metadata.
+func (r *RootMetadata) GetVersion() uint64 {
+	return r.Version
+}
+
+// IncrementVersion increments the metadata version number by 1.
+func (r *RootMetadata) IncrementVersion() {
+	r.Version++
 }
 
 // GetRepositoryLocation returns the canonical location of the Git repository.
